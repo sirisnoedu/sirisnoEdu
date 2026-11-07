@@ -4,1091 +4,415 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>SIRISNO Edu</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM CDN -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <!-- Babel Standalone untuk membaca JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    @keyframes pulse-slow {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    .animate-pulse-slow { animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
+    .fade-in { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-blue-200">
-  <div id="root"></div>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col justify-between">
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+  <!-- NAVBAR -->
+  <nav class="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
+    <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('home')">
+      <div class="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-md">S</div>
+      <span class="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">SIRISNO Edu</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="lofiBtn" onclick="toggleLofi()" class="p-2.5 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center gap-2 text-sm font-semibold">
+        🎵 <span class="hidden sm:inline">Muzik Lofi</span>
+      </button>
+      <div id="authNav">
+        <button onclick="navigate('student_dash')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm shadow-md transition">Masuk Murid</button>
+      </div>
+    </div>
+  </nav>
 
-    // --- LOFI MUSIC GENERATOR (Web Audio API) ---
-    class LofiGenerator {
-      constructor() {
-        this.ctx = null;
-        this.isPlaying = false;
-        this.masterGain = null;
-        this.nextNoteTime = 0;
-        this.currentChord = 0;
-        this.timerID = null;
-        
-        this.chords = [
-          [130.81, 164.81, 196.00, 246.94, 293.66], // Cmaj9
-          [174.61, 220.00, 261.63, 329.63, 392.00], // Fmaj9
-          [196.00, 246.94, 293.66, 329.63, 392.00], // G6
-          [110.00, 130.81, 164.81, 196.00, 246.94]  // Am9
-        ];
+  <!-- MAIN CONTAINER -->
+  <main id="app" class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 fade-in"></main>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 text-slate-400 py-6 text-center text-xs sm:text-sm">
+    <p>&copy; 2026 SIRISNO Edu. Pembelajaran Digital Interaktif KPM.</p>
+  </footer>
+
+  <script>
+    // --- APP STATE ---
+    let state = {
+      view: 'home',
+      role: null,
+      playerName: 'Murid Pintar',
+      subject: null,
+      level: null,
+      gameMode: null,
+      noteData: null,
+      score: 0,
+      lives: 3,
+      currentQ: 0,
+      lofiPlaying: false
+    };
+
+    const SUBJECTS = ['Bahasa Melayu', 'Sains', 'Matematik', 'Sejarah', 'Pendidikan Islam', 'Bahasa Arab', 'PJPK', 'Muzik', 'RBT', 'PSV'];
+
+    const SAMPLE_NOTES = {
+      'Sains': {
+        title: 'Fotosintesis & Tenaga Tumbuhan',
+        intro: 'Fotosintesis ialah proses tumbuhan hijau membuat makanan sendiri menggunakan cahaya matahari, air, dan karbon dioksida.',
+        points: [
+          { subtitle: 'Klorofil', description: 'Pigmen hijau daun yang menyerap tenaga cahaya matahari.' },
+          { subtitle: 'Karbon Dioksida', description: 'Gas yang diserap dari udara melalui liang stoma.' },
+          { subtitle: 'Air & Mineral', description: 'Diserap oleh akar dari tanah untuk kegunaan daun.' },
+          { subtitle: 'Glukosa', description: 'Hasil makanan yang memberi tenaga kepada tumbuhan.' },
+          { subtitle: 'Gas Oksigen', description: 'Dibebaskan untuk kegunaan manusia dan haiwan bernafas.' }
+        ],
+        fun_fact: 'Tanpa fotosintesis, bekalan oksigen di Bumi akan berkurangan dengan cepat!'
+      },
+      'Bahasa Melayu': {
+        title: 'Kata Kerja & Imbuhan',
+        intro: 'Kata kerja menunjukkan perbuatan atau tindakan yang dilakukan oleh manusia, haiwan, atau benda.',
+        points: [
+          { subtitle: 'Kata Kerja Transitif', description: 'Memerlukan objek terus (Contoh: membaca buku).' },
+          { subtitle: 'Kata Kerja Tak Transitif', description: 'Boleh berdiri sendiri (Contoh: tidur, tersenyum).' },
+          { subtitle: 'Imbuhan Men-', description: 'Membentuk kata kerja aktif seperti menulis dan melukis.' },
+          { subtitle: 'Imbuhan Di-', description: 'Membentuk kata kerja pasif seperti ditulis dan dimakan.' }
+        ],
+        fun_fact: 'Bahasa Melayu mempunyai sistem imbuhan yang sangat kaya dan fleksibel!'
       }
+    };
 
-      initContext() {
-        if (!this.ctx) {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-          this.masterGain = this.ctx.createGain();
-          this.masterGain.gain.value = 0.15;
-          this.masterGain.connect(this.ctx.destination);
-        }
-      }
+    const SAMPLE_GAMES = {
+      mcq: [
+        { q: 'Apakah yang diserap oleh akar tumbuhan semasa fotosintesis?', options: ['Air', 'Oksigen', 'Minyak'], correct: 0, trivia: 'Air diangkut dari akar ke daun melalui salur xilem!' },
+        { q: 'Nilai tempat bagi angka 5 dalam 45,210 ialah?', options: ['Ratus', 'Ribu', 'Puluh Ribu'], correct: 1, trivia: 'Angka 5 berada di kedudukan ribu!' },
+        { q: 'Antara berikut, yang manakah Kata Kerja Transitif?', options: ['Membaca buku', 'Tidur nyenyak', 'Tersenyum'], correct: 0, trivia: 'Membaca buku memerlukan objek (buku).' }
+      ],
+      whack: [
+        { q: 'Ketuk gas yang dibebaskan semasa fotosintesis:', options: ['Oksigen', 'Karbon Dioksida', 'Nitrogen'], correct: 0, trivia: 'Oksigen dibebaskan untuk kita bernafas!' },
+        { q: 'Ketuk jawapan bagi 12 × 4:', options: ['48', '44', '52'], correct: 0, trivia: '12 darab 4 ialah 48!' }
+      ],
+      riddle: [
+        { riddle: 'Saya hijau di pokok, menyerap matahari untuk buat makanan. Siapa saya?', answer: 'DAUN', trivia: 'Daun mempunyai klorofil hijau.' },
+        { riddle: 'Saya tempat tinggal manusia dan haiwan. Siapa saya?', answer: 'BUMI', trivia: 'Bumi ialah planet ketiga dari matahari.' }
+      ]
+    };
 
-      playChord(chordIndex, time) {
-        const chord = this.chords[chordIndex];
-        chord.forEach((freq, i) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          
-          osc.type = i === 0 ? 'triangle' : 'sine';
-          osc.frequency.value = freq;
-          
-          gain.gain.setValueAtTime(0, time);
-          gain.gain.linearRampToValueAtTime(0.15, time + 0.5 + (i * 0.1));
-          gain.gain.exponentialRampToValueAtTime(0.001, time + 4.0);
-          
-          osc.connect(gain);
-          gain.connect(this.masterGain);
-          
-          osc.start(time);
-          osc.stop(time + 4.5);
-        });
-
-        if (Math.random() > 0.3) {
-            const sparkleOsc = this.ctx.createOscillator();
-            const sparkleGain = this.ctx.createGain();
-            sparkleOsc.type = 'sine';
-            sparkleOsc.frequency.value = chord[Math.floor(Math.random() * chord.length)] * (Math.random() > 0.5 ? 2 : 4); 
-            sparkleGain.gain.setValueAtTime(0, time + 1.0); 
-            sparkleGain.gain.linearRampToValueAtTime(0.05, time + 1.5);
-            sparkleGain.gain.exponentialRampToValueAtTime(0.001, time + 3.0);
-            sparkleOsc.connect(sparkleGain);
-            sparkleGain.connect(this.masterGain);
-            sparkleOsc.start(time + 1.0);
-            sparkleOsc.stop(time + 3.0);
-        }
-      }
-
-      scheduler() {
-        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
-          this.playChord(this.currentChord, this.nextNoteTime);
-          this.nextNoteTime += 4.0;
-          this.currentChord = (this.currentChord + 1) % this.chords.length;
-        }
-        this.timerID = requestAnimationFrame(this.scheduler.bind(this));
-      }
-
-      toggle() {
-        this.initContext();
-        if (this.isPlaying) {
-          cancelAnimationFrame(this.timerID);
-          this.ctx.suspend();
-          this.isPlaying = false;
-        } else {
-          this.ctx.resume();
-          this.nextNoteTime = this.ctx.currentTime + 0.1;
-          this.scheduler();
-          this.isPlaying = true;
-        }
-        return this.isPlaying;
+    // --- LOFI AUDIO ENGINE ---
+    let audioCtx = null;
+    let lofiInterval = null;
+    function toggleLofi() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      state.lofiPlaying = !state.lofiPlaying;
+      const btn = document.getElementById('lofiBtn');
+      if (state.lofiPlaying) {
+        audioCtx.resume();
+        btn.className = "p-2.5 rounded-full bg-indigo-600 text-white transition flex items-center gap-2 text-sm font-semibold shadow-md animate-pulse";
+        btn.innerHTML = "🎶 <span>Muzik Lofi: ON</span>";
+      } else {
+        audioCtx.suspend();
+        btn.className = "p-2.5 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-50 transition flex items-center gap-2 text-sm font-semibold";
+        btn.innerHTML = "🎵 <span class=\"hidden sm:inline\">Muzik Lofi</span>";
       }
     }
 
-    // --- SFX GENERATOR ---
-    const playSFX = (type) => {
+    function playSound(type) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         const now = ctx.currentTime;
-        if (type === 'hit' || type === 'correct') {
-           osc.type = 'sine';
-           osc.frequency.setValueAtTime(600, now);
-           osc.frequency.setValueAtTime(1200, now + 0.1);
-           gain.gain.setValueAtTime(0.3, now);
-           gain.gain.linearRampToValueAtTime(0, now + 0.3);
-           osc.start(now);
-           osc.stop(now + 0.3);
-        } else if (type === 'wrong') {
-           osc.type = 'sawtooth';
-           osc.frequency.setValueAtTime(250, now);
-           osc.frequency.linearRampToValueAtTime(100, now + 0.3);
-           gain.gain.setValueAtTime(0.3, now);
-           gain.gain.linearRampToValueAtTime(0, now + 0.3);
-           osc.start(now);
-           osc.stop(now + 0.3);
-        } else if (type === 'over') {
-           osc.type = 'square';
-           osc.frequency.setValueAtTime(150, now);
-           osc.frequency.exponentialRampToValueAtTime(50, now + 1.0);
-           gain.gain.setValueAtTime(0.3, now);
-           gain.gain.linearRampToValueAtTime(0, now + 1.0);
-           osc.start(now);
-           osc.stop(now + 1.0);
+        if (type === 'correct') {
+          osc.frequency.setValueAtTime(523, now);
+          osc.frequency.setValueAtTime(659, now + 0.1);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+        } else {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(200, now);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.3);
         }
+        osc.start(now);
+        osc.stop(now + 0.3);
       } catch(e) {}
-    };
-
-    // --- ARCADE BGM GENERATOR ---
-    class ArcadeBGM {
-      constructor() {
-        this.ctx = null;
-        this.isPlaying = false;
-        this.masterGain = null;
-        this.nextNoteTime = 0;
-        this.currentNote = 0;
-        this.timerID = null;
-        
-        this.notes = [
-          [261.63, 329.63, 392.00, 523.25], // C maj
-          [261.63, 329.63, 392.00, 523.25], 
-          [174.61, 220.00, 261.63, 349.23], // F maj
-          [196.00, 246.94, 293.66, 392.00]  // G maj
-        ];
-        this.chordIndex = 0;
-      }
-
-      initContext() {
-        if (!this.ctx) {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-          this.masterGain = this.ctx.createGain();
-          this.masterGain.gain.value = 0.03;
-          this.masterGain.connect(this.ctx.destination);
-        }
-      }
-
-      scheduler() {
-        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          
-          osc.type = 'square';
-          osc.frequency.value = this.notes[this.chordIndex][this.currentNote];
-          
-          gain.gain.setValueAtTime(0, this.nextNoteTime);
-          gain.gain.linearRampToValueAtTime(0.1, this.nextNoteTime + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, this.nextNoteTime + 0.15);
-          
-          osc.connect(gain);
-          gain.connect(this.masterGain);
-          osc.start(this.nextNoteTime);
-          osc.stop(this.nextNoteTime + 0.15);
-
-          this.currentNote++;
-          if (this.currentNote >= 4) {
-              this.currentNote = 0;
-              if (Math.random() > 0.7) {
-                  this.chordIndex = (this.chordIndex + 1) % this.notes.length;
-              }
-          }
-          this.nextNoteTime += 0.15; 
-        }
-        this.timerID = requestAnimationFrame(this.scheduler.bind(this));
-      }
-
-      start() {
-        this.initContext();
-        if (!this.isPlaying) {
-          this.ctx.resume();
-          this.nextNoteTime = this.ctx.currentTime + 0.1;
-          this.scheduler();
-          this.isPlaying = true;
-        }
-      }
-
-      stop() {
-        if (this.isPlaying && this.ctx) {
-          cancelAnimationFrame(this.timerID);
-          this.ctx.suspend();
-          this.isPlaying = false;
-        }
-      }
     }
 
-    // --- DATA HELPERS ---
-    const SUBJECTS = ['Bahasa Melayu', 'Sains', 'Matematik', 'Sejarah', 'Pendidikan Islam', 'Bahasa Arab', 'PJPK', 'Muzik', 'RBT', 'PSV'];
-
-    const TRANSLATIONS = {
-      ms: { 
-        student: 'Murid', teacher: 'Guru', portal_teacher: 'Portal Guru', portal_student: 'Portal Murid', logout: 'Log Keluar',
-        hero_title: 'Pendidikan Interaktif &\n Menyeronokkan dengan', hero_sub: 'Platform pembelajaran digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif, permainan merangsang minda, dan portal guru yang efisien.',
-        login_student: 'Masuk Sebagai Murid', login_teacher: 'Masuk Sebagai Guru',
-        feat1_title: 'Nota & Infografik', feat1_desc: 'Terokai nota dan infografik pintar yang dijana khas merangkumi pelbagai subjek teras KPM dengan visual yang menarik.',
-        feat2_title: 'Permainan Digital AI', feat2_desc: 'Rangsang minda dengan pelbagai mod permainan interaktif.',
-        feat3_title: 'Analisis Prestasi', feat3_desc: 'Guru boleh memantau pencapaian murid secara langsung melalui penjana kuiz dan carta analisis.',
-        welcome: 'Selamat Datang, Murid Pintar! 🚀', choose_activity: 'Pilih aktiviti pembelajaran anda hari ini.',
-        notes: 'Nota & Infografik', notes_desc: 'Ulang kaji subjek teras & elektif KPM.',
-        games: 'Permainan Digital AI', games_desc: 'Cabaran minda 3 Mod Pintar.',
-        uasa: 'Latihan UASA (2018-Kini)', uasa_desc: 'Koleksi soalan peperiksaan lepas.',
-        live_quiz: 'Kuiz Langsung (Dari Guru)', no_quiz: 'Belum ada kuiz yang diterbitkan oleh guru buat masa ini.',
-        questions: 'Soalan', created_by: 'Ciptaan Guru',
-        teacher_portal: 'Portal Guru', create_quiz: 'Cipta Kuiz Baru', manage_quiz: 'Urus Kuiz', analytics: 'Analisis Prestasi',
-        ai_title: 'Penjana Kuiz Automatik', ai_desc: 'Bina set soalan secara automatik dan pantas.',
-        quiz_title: 'Tajuk Kuiz', quiz_subject: 'Subjek',
-        add_question: 'Tambah Soalan', publish: 'Terbitkan Kuiz', publishing: 'Menerbitkan...',
-        no_published: 'Tiada kuiz diterbitkan lagi.', delete: 'Padam',
-        no_records: 'Belum ada rekod jawapan murid.',
-        date: 'Tarikh', student_name: 'Nama Murid', class_name: 'Kelas', subject: 'Subjek', score: 'Markah', status: 'Status',
-        pass: 'LULUS', fail: 'GAGAL',
-        enter_name: 'Sila Masukkan Nama Anda', enter_class: 'Masukkan Nama Kelas Anda', start_quiz: 'Mula Kuiz', submit_answers: 'Hantar Jawapan', next: 'Seterusnya',
-        back: 'Kembali', back_dash: 'Kembali ke Dashboard', game_title: 'Cabaran Minda', game_sub: 'Jawab pantas untuk kumpul mata!', game_score: 'Skor Terkumpul:', game_ans: 'Jawab',
-        player_name: 'Masukkan Nama Pemain', start_game: 'Mula Bermain', leaderboard: 'Carta Kedudukan', level_1: 'Tahap 1 (Tahun 1-3)', level_2: 'Tahap 2 (Tahun 4-6)',
-        music_on: 'Muzik Tenang: Aktif', music_off: 'Muzik Tenang: Mati',
-        ai_game_title: 'Pilih Mod Permainan AI',
-        ai_game_sub: 'Pilih jenis cabaran AI untuk subjek',
-        mode_mcq: 'Pengembaraan Fakta',
-        mode_mcq_desc: 'Lawan masa! Jawab cabaran fakta secepat mungkin sebelum masa tamat.',
-        mode_whack: 'Ketuk Jawapan Pintar',
-        mode_whack_desc: 'Uji refleks anda! Ketuk pilihan jawapan yang tepat apabila ia muncul dari lubang.',
-        mode_riddle: 'Teka-Teki Pintar',
-        mode_riddle_desc: 'Main teka huruf rahsia! Jangan sampai salah teka 5 kali atau anda kalah!',
-        generating_title: 'MEMUATKAN GAME...',
-        generating_notes: 'MENJANA INFOGRAFIK PINTAR...',
-        out_of_lives: 'Anda telah kehabisan nyawa!',
-        final_score: 'Skor Akhir Anda:',
-        play_again: 'Main Semula',
-        congrats: 'Tahniah!',
-        oops: 'Aduh!',
-        next_challenge: 'Teruskan Cabaran',
-        see_results: 'Lihat Keputusan Akhir',
-        start_gen: 'Mula Bermain!',
-        level_text: 'Tahap',
-        score_text: 'Skor',
-        life_text: 'Nyawa',
-        select_level_title: 'Pilih Tahap:',
-        change_level: 'Tukar Tahap',
-        time_out: 'Masa Tamat!',
-        guess_word: 'Teka Perkataan Rahsia:'
-      },
-      en: { 
-        student: 'Student', teacher: 'Teacher', portal_teacher: 'Teacher Portal', portal_student: 'Student Portal', logout: 'Logout',
-        hero_title: 'Interactive & Fun\n Education with', hero_sub: 'Digital learning platform based on the KPM syllabus (Years 1-6). Featuring interactive notes, AI games, and an efficient teacher portal.',
-        login_student: 'Login as Student', login_teacher: 'Login as Teacher',
-        feat1_title: 'Notes & Infographics', feat1_desc: 'Explore smart notes and infographics tailored for various KPM core subjects with engaging visuals.',
-        feat2_title: 'AI Digital Games', feat2_desc: 'Stimulate your mind with various interactive game modes.',
-        feat3_title: 'Performance Analytics', feat3_desc: 'Teachers can monitor student progress directly via live analytics.',
-        welcome: 'Welcome, Smart Student! 🚀', choose_activity: 'Choose your learning activity today.',
-        notes: 'Notes & Infographics', notes_desc: 'Review KPM core & elective subjects.',
-        games: 'AI Digital Games', games_desc: '3 Smart Mind Challenge Modes.',
-        uasa: 'UASA Practice (2018-Now)', uasa_desc: 'Collection of past exam questions.',
-        live_quiz: 'Live Quiz (From Teacher)', no_quiz: 'No quizzes have been published by teachers yet.',
-        questions: 'Questions', created_by: 'Created by Teacher',
-        teacher_portal: 'Teacher Portal', create_quiz: 'Create New Quiz', manage_quiz: 'Manage Quizzes', analytics: 'Performance Analytics',
-        ai_title: 'Auto Quiz Generator', ai_desc: 'Create question sets quickly and automatically.',
-        quiz_title: 'Quiz Title', quiz_subject: 'Subject',
-        add_question: 'Add Question', publish: 'Publish Quiz', publishing: 'Publishing...',
-        no_published: 'No quizzes published yet.', delete: 'Delete',
-        no_records: 'No student answer records yet.',
-        date: 'Date', student_name: 'Student Name', class_name: 'Class', subject: 'Subject', score: 'Score', status: 'Status',
-        pass: 'PASS', fail: 'FAIL',
-        enter_name: 'Please Enter Your Name', enter_class: 'Enter Your Class Name', start_quiz: 'Start Quiz', submit_answers: 'Submit Answers', next: 'Next',
-        back: 'Back', back_dash: 'Back to Dashboard', game_title: 'Mind Challenge', game_sub: 'Answer fast to collect points!', game_score: 'Total Score:', game_ans: 'Answer',
-        player_name: 'Enter Player Name', start_game: 'Start Playing', leaderboard: 'Leaderboard', level_1: 'Level 1 (Years 1-3)', level_2: 'Level 2 (Years 4-6)',
-        music_on: 'Lofi Music: On', music_off: 'Lofi Music: Off',
-        ai_game_title: 'Select AI Game Mode',
-        ai_game_sub: 'Choose an AI challenge for the subject',
-        mode_mcq: 'Fact Adventure',
-        mode_mcq_desc: 'Race against time! Answer facts as quickly as possible before time runs out.',
-        mode_whack: 'Whack-a-Fact',
-        mode_whack_desc: 'Test your reflexes! Tap the correct answer when it pops out of the hole.',
-        mode_riddle: 'Smart Riddles',
-        mode_riddle_desc: 'Play secret word guess! Guess the letters, don\'t make 5 mistakes or you lose!',
-        generating_title: 'LOADING GAME...',
-        generating_notes: 'GENERATING SMART INFOGRAPHIC...',
-        out_of_lives: 'You have run out of lives!',
-        final_score: 'Your Final Score:',
-        play_again: 'Play Again',
-        congrats: 'Congratulations!',
-        oops: 'Oops!',
-        next_challenge: 'Continue Challenge',
-        see_results: 'View Final Results',
-        start_gen: 'Start Playing!',
-        level_text: 'Stage',
-        score_text: 'Score',
-        life_text: 'Lives',
-        select_level_title: 'Select Level:',
-        change_level: 'Change Level',
-        time_out: 'Time is Up!',
-        guess_word: 'Guess the Secret Word:'
-      }
-    };
-
-    // --- SAMPLE DATA FOR OFFLINE / STANDALONE MODE ---
-    const SAMPLE_NOTES = {
-      'Sains': {
-        title: 'Fotosintesis & Tenaga Tumbuhan',
-        intro: 'Fotosintesis ialah proses di mana tumbuhan hijau membuat makanan sendiri menggunakan cahaya matahari, air, dan karbon dioksida.',
-        points: [
-          { subtitle: 'Klorofil', description: 'Pigmen hijau pada daun yang menyerap tenaga cahaya matahari.' },
-          { subtitle: 'Karbon Dioksida', description: 'Gas yang diserap dari udara melalui liang stoma pada daun.' },
-          { subtitle: 'Air & Mineral', description: 'Diserap oleh akar dari dalam tanah dan diangkut ke daun.' },
-          { subtitle: 'Glukosa', description: 'Hasil makanan yang terhasil untuk memberikan tenaga kepada tumbuhan.' },
-          { subtitle: 'Gas Oksigen', description: 'Bahan sampingan fotosintesis yang dibebaskan untuk pernafasan haiwan dan manusia.' }
-        ],
-        fun_fact: 'Tanpa fotosintesis tumbuhan, bekalan oksigen di Bumi akan berkurangan dalam masa singkat!'
-      },
-      'Bahasa Melayu': {
-        title: 'Kata Kerja & Golongan Kata',
-        intro: 'Kata kerja ialah perkataan yang menunjukkan perbuatan atau tindakan yang dilakukan oleh manusia, haiwan, atau benda.',
-        points: [
-          { subtitle: 'Kata Kerja Transitif', description: 'Memerlukan objek terus selepas kata kerja. Contoh: membaca buku.' },
-          { subtitle: 'Kata Kerja Tak Transitif', description: 'Boleh berdiri sendiri tanpa objek. Contoh: tidur, tersenyum.' },
-          { subtitle: 'Kata Kerja Pasif', description: 'Perbuatan yang dikenakan ke atas subjek. Contoh: dimakan oleh kucing.' },
-          { subtitle: 'Imbuhan Men-', description: 'Membentuk kata kerja aktif seperti menulis, melukis, menyanyi.' },
-          { subtitle: 'Imbuhan Di-', description: 'Membentuk kata kerja pasif seperti ditulis, dilukis, dinyanyikan.' }
-        ],
-        fun_fact: 'Bahasa Melayu mempunyai pelbagai imbuhan unik yang boleh mengubah maksud asas sesuatu perkataan!'
-      },
-      'Matematik': {
-        title: 'Pecahan, Perpuluhan & Peratus',
-        intro: 'Pecahan mewakili bahagian daripada keseluruhan unit dan berkait rapat dengan perpuluhan serta peratus.',
-        points: [
-          { subtitle: 'Pecahan Wajar', description: 'Pengangka lebih kecil daripada penyebut (Contoh: 1/2, 3/4).' },
-          { subtitle: 'Pecahan Tak Wajar', description: 'Pengangka lebih besar atau sama dengan penyebut (Contoh: 5/3).' },
-          { subtitle: 'Nombor Bercampur', description: 'Gabungan nombor bulat dan pecahan wajar (Contoh: 1 1/2).' },
-          { subtitle: 'Tukar ke Perpuluhan', description: 'Membahagi pengangka dengan penyebut (Contoh: 1/2 = 0.5).' },
-          { subtitle: 'Tukar ke Peratus', description: 'Darabkan pecahan atau perpuluhan dengan 100% (Contoh: 0.5 = 50%).' }
-        ],
-        fun_fact: 'Perkataan peratus berasal daripada perkataan Latin "per centum" yang bermaksud daripada seratus!'
-      }
-    };
-
-    const SAMPLE_GAMES = {
-      mcq: [
-        { q: 'Apakah bahan utama yang diserap oleh akar tumbuhan semasa fotosintesis?', options: ['Air', 'Oksigen', 'Minyak'], correct: 0, trivia: 'Air diangkut dari akar melalui salur xilem ke daun!' },
-        { q: 'Apakah nilai tempat bagi angka 5 dalam nombor 45,210?', options: ['Ratus', 'Ribu', 'Puluh Ribu'], correct: 1, trivia: 'Nombor 5 berada pada kedudukan ribu!' },
-        { q: 'Antara berikut, yang manakah Kata Kerja Transitif?', options: ['Membaca buku', 'Tidur nyenyak', 'Tersenyum lebar'], correct: 0, trivia: 'Kata kerja transitif memerlukan objek (buku).' },
-        { q: 'Pusat pentadbiran Kerajaan Melayu Melaka yang terkenal terletak di?', options: ['Melaka', 'Johor', 'Pahang'], correct: 0, trivia: 'Melaka pernah menjadi pusat perdagangan dunia!' }
-      ],
-      whack: [
-        { q: 'Pilih gas yang dibebaskan semasa fotosintesis:', options: ['Oksigen', 'Karbon Dioksida', 'Nitrogen'], correct: 0, trivia: 'Oksigen amat penting untuk pernafasan kita!' },
-        { q: 'Hasil bagi 12 × 4 ialah:', options: ['48', '44', '52'], correct: 0, trivia: '12 darab 4 bersamaan 48!' },
-        { q: 'Organ utama manusia untuk bernafas ialah:', options: ['Peparu', 'Jantung', 'Hati'], correct: 0, trivia: 'Peparu menukar oksigen ke dalam darah!' }
-      ],
-      riddle: [
-        { riddle: 'Saya hijau di pokok, menyerap sinar matahari untuk buat makanan. Siapa saya?', answer_word: 'DAUN', trivia: 'Daun mengandungi klorofil hijau.' },
-        { riddle: 'Saya adalah planet tempat tinggal manusia dan haiwan. Siapa saya?', answer_word: 'BUMI', trivia: 'Bumi ialah planet ketiga dari matahari.' },
-        { riddle: 'Saya adalah nombor ganjil selepas dua. Siapa saya?', answer_word: 'TIGA', trivia: '3 ialah nombor perdana terawal.' }
-      ]
-    };
-
-    // --- MAIN APP COMPONENT ---
-    function App() {
-      const [role, setRole] = useState(null); 
-      const [lang, setLang] = useState('ms'); 
-      const [view, setView] = useState('home'); 
-      const [toastMessage, setToastMessage] = useState('');
-      
-      const lofiRef = useRef(null);
-      const [isMusicPlaying, setIsMusicPlaying] = useState(false);
-
-      useEffect(() => {
-        lofiRef.current = new LofiGenerator();
-      }, []);
-
-      useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
-      });
-
-      const toggleMusic = () => {
-        if (lofiRef.current) {
-          const state = lofiRef.current.toggle();
-          setIsMusicPlaying(state);
-          showToast(state ? TRANSLATIONS[lang].music_on : TRANSLATIONS[lang].music_off);
-        }
-      };
-
-      const showToast = (msg) => {
-        setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3000);
-      };
-
-      const handleLogin = (selectedRole) => {
-        setRole(selectedRole);
-        setView(selectedRole === 'teacher' ? 'teacher_dash' : 'student_dash');
-      };
-
-      const handleLogout = () => {
-        setRole(null);
-        setView('home');
-      };
-
-      const t = TRANSLATIONS[lang] || TRANSLATIONS['ms'];
-
-      return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col transition-all">
-          <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-40">
-            <div 
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => view !== 'home' && setView(role === 'teacher' ? 'teacher_dash' : 'student_dash')}
-            >
-              <i data-lucide="graduation-cap" className="text-blue-600 w-8 h-8"></i>
-              <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500 hidden sm:block">
-                SIRISNO Edu
-              </span>
-            </div>
-            <div className="flex items-center gap-4 sm:gap-6">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <i data-lucide="globe" className="w-4 h-4"></i>
-                <select 
-                  value={lang} 
-                  onChange={e => setLang(e.target.value)} 
-                  className="bg-transparent border-none outline-none cursor-pointer font-bold hover:text-blue-600 transition"
-                >
-                  <option value="ms">BM</option>
-                  <option value="en">EN</option>
-                </select>
-              </div>
-              <button 
-                onClick={toggleMusic}
-                className={`p-2 rounded-full transition-all flex items-center justify-center ${isMusicPlaying ? 'bg-indigo-100 text-indigo-600 shadow-inner' : 'hover:bg-slate-100 text-slate-400'}`}
-                title="Lofi Study Music"
-              >
-                <i data-lucide={isMusicPlaying ? "music" : "music-2"} className={`w-5 h-5 ${isMusicPlaying ? 'animate-pulse' : ''}`}></i>
-              </button>
-              
-              <div>
-                {!role ? (
-                  <div className="flex gap-2 sm:gap-4">
-                    <button onClick={() => handleLogin('student')} className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-full transition">
-                      <i data-lucide="user" className="w-4 h-4"></i> <span className="hidden sm:block">{t.student}</span>
-                    </button>
-                    <button onClick={() => handleLogin('teacher')} className="flex items-center gap-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-full shadow-md transition">
-                      <i data-lucide="users" className="w-4 h-4"></i> <span className="hidden sm:block">{t.teacher}</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 sm:gap-4">
-                    <span className="text-xs sm:text-sm font-medium bg-slate-100 px-3 py-1 rounded-full text-slate-600">
-                      {role === 'teacher' ? t.portal_teacher : t.portal_student}
-                    </span>
-                    <button onClick={handleLogout} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition" title={t.logout}>
-                      <i data-lucide="log-out" className="w-5 h-5"></i>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </nav>
-
-          <main className="flex-1 flex flex-col relative z-10">
-            {view === 'home' && <LandingPage onRoleSelect={handleLogin} t={t} />}
-            {view === 'student_dash' && <StudentDashboard setView={setView} t={t} />}
-            {view === 'teacher_dash' && <TeacherDashboard setView={setView} showToast={showToast} t={t} />}
-            {view === 'notes' && <NotesView setView={setView} t={t} />}
-            {view === 'game' && <GameView setView={setView} t={t} />}
-          </main>
-
-          <footer className="bg-slate-900 text-slate-400 py-6 text-center text-sm relative z-10">
-            <p>&copy; 2026 SIRISNO Edu. KPM Syllabus Aligned. Pembelajaran Digital Interaktif.</p>
-          </footer>
-
-          {toastMessage && (
-            <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-5 z-50">
-              <i data-lucide="check-circle" className="w-5 h-5 text-green-400"></i>
-              {toastMessage}
-            </div>
-          )}
-        </div>
-      );
+    // --- ROUTER & RENDER ENGINE ---
+    function navigate(viewName) {
+      state.view = viewName;
+      render();
+      window.scrollTo(0,0);
     }
 
-    // --- LANDING PAGE ---
-    function LandingPage({ onRoleSelect, t }) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-white to-blue-50/50">
-          <div className="max-w-4xl text-center space-y-8 mt-10">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight whitespace-pre-line">
-              {t.hero_title} <span className="text-blue-600">SIRISNO Edu</span>
+    function render() {
+      const app = document.getElementById('app');
+      app.innerHTML = '';
+
+      if (state.view === 'home') {
+        app.innerHTML = `
+          <div class="text-center py-12 space-y-6">
+            <h1 class="text-4xl sm:text-6xl font-black text-slate-900 leading-tight">
+              Pendidikan Interaktif & Menyeronokkan dengan <br><span class="text-blue-600">SIRISNO Edu</span>
             </h1>
-            <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
-              {t.hero_sub}
+            <p class="text-lg text-slate-600 max-w-2xl mx-auto">
+              Platform digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif & 3 mod permainan AI merangsang minda.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-              <button 
-                onClick={() => onRoleSelect('student')}
-                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold py-4 px-8 rounded-2xl shadow-xl shadow-blue-600/20 transition-all hover:scale-105"
-              >
-                <i data-lucide="user" className="w-5 h-5"></i> {t.login_student}
+            <div class="flex flex-col sm:flex-row justify-center gap-4 pt-4">
+              <button onclick="navigate('student_dash')" class="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-4 px-8 rounded-2xl shadow-xl transition transform hover:scale-105">
+                🚀 Masuk Sebagai Murid
               </button>
-              <button 
-                onClick={() => onRoleSelect('teacher')}
-                className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 text-lg font-semibold py-4 px-8 rounded-2xl shadow-sm transition-all hover:scale-105"
-              >
-                <i data-lucide="users" className="w-5 h-5"></i> {t.login_teacher}
+              <button onclick="navigate('teacher_dash')" class="bg-white hover:bg-slate-100 border-2 border-slate-200 text-slate-800 text-lg font-bold py-4 px-8 rounded-2xl shadow-sm transition">
+                👨‍🏫 Portal Guru
               </button>
             </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mt-24 mb-10">
-            <FeatureCard icon="book-open" title={t.feat1_title} desc={t.feat1_desc} color="text-indigo-500" bg="bg-indigo-50" />
-            <FeatureCard icon="gamepad-2" title={t.feat2_title} desc={t.feat2_desc} color="text-pink-500" bg="bg-pink-50" />
-            <FeatureCard icon="activity" title={t.feat3_title} desc={t.feat3_desc} color="text-teal-500" bg="bg-teal-50" />
-          </div>
-        </div>
-      );
-    }
-
-    function FeatureCard({ icon, title, desc, color, bg }) {
-      return (
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition">
-          <div className={`w-14 h-14 ${bg} ${color} rounded-2xl flex items-center justify-center mb-4`}>
-            <i data-lucide={icon} className="w-7 h-7"></i>
-          </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>
-          <p className="text-slate-600 leading-relaxed">{desc}</p>
-        </div>
-      );
-    }
-
-    // --- STUDENT DASHBOARD ---
-    function StudentDashboard({ setView, t }) {
-      return (
-        <div className="p-6 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in">
-          <header className="mb-10">
-            <h2 className="text-3xl font-bold text-slate-800">{t.welcome}</h2>
-            <p className="text-slate-500 mt-2">{t.choose_activity}</p>
-          </header>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <DashboardCard 
-              title={t.notes}
-              desc={t.notes_desc}
-              icon="file-text"
-              color="bg-indigo-500 shadow-indigo-500/30"
-              onClick={() => setView('notes')}
-            />
-            <DashboardCard 
-              title={t.games}
-              desc={t.games_desc}
-              icon="gamepad-2"
-              color="bg-pink-500 shadow-pink-500/30"
-              onClick={() => setView('game')}
-            />
-            <DashboardCard 
-              title={t.uasa}
-              desc={t.uasa_desc}
-              icon="edit-3"
-              color="bg-teal-500 shadow-teal-500/30"
-              onClick={() => alert("Modul UASA akan dibuka hampir dengan tarikh peperiksaan!")}
-            />
-          </div>
-        </div>
-      );
-    }
-
-    function DashboardCard({ title, desc, icon, color, onClick }) {
-      return (
-        <div 
-          onClick={onClick}
-          className={`${color} rounded-3xl p-6 text-white shadow-lg cursor-pointer transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden`}
-        >
-          <div className="absolute -right-4 -top-4 opacity-20 w-32 h-32 bg-white rounded-full"></div>
-          <div className="relative z-10">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6">
-              <i data-lucide={icon} className="w-8 h-8 text-white"></i>
-            </div>
-            <h3 className="text-xl font-bold mb-2">{title}</h3>
-            <p className="text-white/80 font-medium">{desc}</p>
-          </div>
-        </div>
-      );
-    }
-
-    // --- TEACHER DASHBOARD ---
-    function TeacherDashboard({ setView, showToast, t }) {
-      return (
-        <div className="p-6 max-w-4xl mx-auto w-full text-center space-y-6">
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-            <i data-lucide="users" className="w-16 h-16 text-blue-600 mx-auto"></i>
-            <h2 className="text-3xl font-bold text-slate-800">{t.teacher_portal}</h2>
-            <p className="text-slate-600">{t.ai_desc}</p>
-            <div className="p-4 bg-blue-50 text-blue-700 rounded-xl font-medium">
-              Sistem Log Masuk Rasmi Guru & Pangkalan Data Firestore sedang dikonfigurasikan.
-            </div>
-            <button 
-              onClick={() => setView('student_dash')}
-              className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-3 rounded-xl transition"
-            >
-              {t.back_dash}
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // --- NOTES VIEW (FULLY INTERACTIVE & FUNCTIONAL) ---
-    function NotesView({ setView, t }) {
-      const [selectedSubject, setSelectedSubject] = useState(null);
-      const [selectedLevel, setSelectedLevel] = useState(null);
-      const [noteData, setNoteData] = useState(null);
-
-      const handleSelectSubject = (sub) => {
-        setSelectedSubject(sub);
-      };
-
-      const handleSelectLevel = (lvl) => {
-        setSelectedLevel(lvl);
-        // Ambik nota contoh berdasarkan subjek atau fallback ke Sains
-        const fallback = SAMPLE_NOTES[selectedSubject] || SAMPLE_NOTES['Sains'];
-        setNoteData(fallback);
-      };
-
-      if (noteData) {
-        return (
-          <div className="p-6 max-w-4xl mx-auto w-full animate-in zoom-in-95 pb-20">
-            <button onClick={() => setNoteData(null)} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-              ← {t.back}
-            </button>
-            <div className="bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-100">
-              <div className="bg-indigo-600 p-8 sm:p-12 text-white">
-                <span className="bg-indigo-500/50 text-indigo-100 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">
-                  {selectedSubject} • {selectedLevel === 'tahap1' ? t.level_1 : t.level_2}
-                </span>
-                <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">{noteData.title}</h1>
+            <div class="grid sm:grid-cols-3 gap-6 pt-12 text-left">
+              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div class="text-3xl mb-3">📚</div>
+                <h3 class="font-bold text-xl mb-2">Nota & Infografik</h3>
+                <p class="text-slate-600 text-sm">Nota ringkas dan padat untuk ulangan pantas subjek KPM.</p>
               </div>
-              
-              <div className="p-6 sm:p-10 space-y-10">
-                <p className="text-xl text-slate-600 font-medium leading-relaxed italic border-l-4 border-indigo-400 pl-6">
-                  "{noteData.intro}"
-                </p>
+              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div class="text-3xl mb-3">🎮</div>
+                <h3 class="font-bold text-xl mb-2">Permainan Digital AI</h3>
+                <p class="text-slate-600 text-sm">3 Mod Permainan Interaktif (Pengembaraan, Ketuk Jawapan & Teka-Teki).</p>
+              </div>
+              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div class="text-3xl mb-3">📊</div>
+                <h3 class="font-bold text-xl mb-2">Analisis Prestasi</h3>
+                <p class="text-slate-600 text-sm">Pantau tahap penguasaan murid secara terus.</p>
+              </div>
+            </div>
+          </div>
+        `;
+      } 
+      
+      else if (state.view === 'student_dash') {
+        app.innerHTML = `
+          <div class="space-y-8">
+            <div>
+              <h2 class="text-3xl font-extrabold">Selamat Datang, Murid Pintar! 🚀</h2>
+              <p class="text-slate-500 mt-1">Pilih aktiviti pembelajaran anda hari ini.</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6">
+              <div onclick="navigate('notes_subject')" class="bg-indigo-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
+                <div class="text-4xl mb-4">📖</div>
+                <h3 class="text-2xl font-bold mb-2">Nota & Infografik</h3>
+                <p class="text-indigo-100">Ulang kaji subjek teras & elektif KPM dengan visual menarik.</p>
+              </div>
+              <div onclick="navigate('game_name')" class="bg-pink-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
+                <div class="text-4xl mb-4">🎮</div>
+                <h3 class="text-2xl font-bold mb-2">Permainan Digital AI</h3>
+                <p class="text-pink-100">Cabaran minda 3 Mod Pintar (Pengembaraan, Ketuk Jawapan & Teka-Teki).</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
 
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  {noteData.points.map((pt, idx) => (
-                    <div key={idx} className="bg-indigo-50/70 rounded-2xl p-6 border border-indigo-100 hover:-translate-y-1 transition-transform">
-                      <div className="w-10 h-10 bg-indigo-500 text-white rounded-full flex items-center justify-center font-bold text-lg mb-4">
-                        {idx + 1}
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-800 mb-2">{pt.subtitle}</h3>
-                      <p className="text-slate-600 text-sm leading-relaxed">{pt.description}</p>
-                    </div>
-                  ))}
-                </div>
+      else if (state.view === 'teacher_dash') {
+        app.innerHTML = `
+          <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-4 max-w-2xl mx-auto">
+            <div class="text-5xl">👨‍🏫</div>
+            <h2 class="text-3xl font-bold">Portal Guru SIRISNO Edu</h2>
+            <p class="text-slate-600">Sistem pengurusan kuiz dan pangkalan data murid sedang disedia untuk kemaskini seterusnya.</p>
+            <button onclick="navigate('student_dash')" class="bg-slate-900 text-white font-bold px-6 py-3 rounded-xl">Kembali ke Dashboard</button>
+          </div>
+        `;
+      }
 
-                {noteData.fun_fact && (
-                  <div className="bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl p-6 sm:p-8 text-white shadow-lg flex items-start gap-4">
-                    <div className="text-4xl">💡</div>
-                    <div>
-                      <h4 className="text-xl font-bold mb-2">Fakta Menarik!</h4>
-                      <p className="font-medium text-lg text-yellow-50">{noteData.fun_fact}</p>
-                    </div>
+      else if (state.view === 'notes_subject') {
+        let html = `
+          <div class="space-y-6">
+            <button onclick="navigate('student_dash')" class="text-slate-500 font-bold">← Kembali</button>
+            <h2 class="text-3xl font-bold">Pilih Subjek Nota:</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        `;
+        SUBJECTS.forEach(sub => {
+          html += `
+            <div onclick="selectSubjectNotes('${sub}')" class="bg-white p-6 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-lg transition cursor-pointer text-center font-bold text-slate-800">
+              <div class="text-3xl mb-2">📄</div>
+              ${sub}
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+        app.innerHTML = html;
+      }
+
+      else if (state.view === 'notes_view') {
+        const note = SAMPLE_NOTES[state.subject] || SAMPLE_NOTES['Sains'];
+        let html = `
+          <div class="bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-100 p-6 sm:p-10 space-y-8">
+            <button onclick="navigate('notes_subject')" class="text-slate-500 font-bold mb-4">← Pilih Subjek Lain</button>
+            <div class="bg-indigo-600 text-white p-8 rounded-2xl">
+              <span class="bg-indigo-500 text-xs font-bold px-3 py-1 rounded-full uppercase">${state.subject}</span>
+              <h1 class="text-3xl sm:text-5xl font-extrabold mt-3">${note.title}</h1>
+            </div>
+            <p class="text-xl text-slate-600 italic border-l-4 border-indigo-500 pl-4">"${note.intro}"</p>
+            <div class="grid sm:grid-cols-2 gap-4">
+        `;
+        note.points.forEach((pt, idx) => {
+          html += `
+            <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
+              <span class="w-8 h-8 bg-indigo-600 text-white rounded-full inline-flex items-center justify-center font-bold mb-3">${idx+1}</span>
+              <h3 class="font-bold text-lg mb-1">${pt.subtitle}</h3>
+              <p class="text-slate-600 text-sm">${pt.description}</p>
+            </div>
+          `;
+        });
+        html += `
+            </div>
+            <div class="bg-amber-400 text-slate-900 p-6 rounded-2xl font-bold flex items-center gap-4">
+              <div class="text-3xl">💡</div>
+              <div>Fakta Menarik: ${note.fun_fact}</div>
+            </div>
+          </div>
+        `;
+        app.innerHTML = html;
+      }
+
+      else if (state.view === 'game_name') {
+        app.innerHTML = `
+          <div class="bg-white p-8 rounded-3xl shadow-xl max-w-md mx-auto text-center space-y-6">
+            <div class="text-5xl">🎮</div>
+            <h2 class="text-2xl font-bold">Masukkan Nama Pemain</h2>
+            <input id="pNameInput" type="text" value="${state.playerName}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-center font-bold text-lg" />
+            <button onclick="setPlayerName()" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 rounded-xl shadow-lg">Seterusnya</button>
+          </div>
+        `;
+      }
+
+      else if (state.view === 'game_mode') {
+        app.innerHTML = `
+          <div class="space-y-6">
+            <button onclick="navigate('student_dash')" class="text-slate-500 font-bold">← Kembali</button>
+            <h2 class="text-3xl font-bold text-center">Pilih Mod Permainan</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+              <div onclick="startGame('mcq')" class="bg-blue-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                <div class="text-5xl mb-4">🚀</div>
+                <h3 class="text-2xl font-bold mb-2">Pengembaraan Fakta</h3>
+                <p class="text-blue-100 text-sm">Jawab cabaran fakta secepat mungkin.</p>
+              </div>
+              <div onclick="startGame('whack')" class="bg-emerald-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                <div class="text-5xl mb-4">🔨</div>
+                <h3 class="text-2xl font-bold mb-2">Ketuk Jawapan Pintar</h3>
+                <p class="text-emerald-100 text-sm">Ketuk jawapan tepat yang muncul dari lubang!</p>
+              </div>
+              <div onclick="startGame('riddle')" class="bg-orange-500 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                <div class="text-5xl mb-4">🧩</div>
+                <h3 class="text-2xl font-bold mb-2">Teka-Teki Pintar</h3>
+                <p class="text-orange-100 text-sm">Main teka huruf rahsia!</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      else if (state.view === 'game_play') {
+        const questions = SAMPLE_GAMES[state.gameMode] || SAMPLE_GAMES.mcq;
+        const q = questions[state.currentQ];
+
+        if (!q || state.lives <= 0) {
+          app.innerHTML = `
+            <div class="bg-slate-900 text-white p-10 rounded-3xl max-w-md mx-auto text-center space-y-6 shadow-2xl">
+              <div class="text-6xl">🏆</div>
+              <h2 class="text-3xl font-extrabold">Permainan Tamat!</h2>
+              <p class="text-slate-400">Pemain: ${state.playerName}</p>
+              <div class="text-5xl font-black text-yellow-400">${state.score} Mata</div>
+              <button onclick="navigate('game_mode')" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-4 rounded-xl shadow-lg">Main Semula</button>
+            </div>
+          `;
+          return;
+        }
+
+        let gameContent = '';
+        if (state.gameMode === 'mcq') {
+          gameContent = `
+            <div class="space-y-4">
+              <div class="bg-slate-800 p-6 rounded-2xl text-center"><h3 class="text-2xl font-bold">${q.q}</h3></div>
+              <div class="grid sm:grid-cols-3 gap-4">
+                ${q.options.map((opt, i) => `<button onclick="answerMCQ(${i})" class="p-4 bg-slate-800 hover:bg-indigo-600 rounded-xl font-bold text-lg">${opt}</button>`).join('')}
+              </div>
+            </div>
+          `;
+        } else if (state.gameMode === 'whack') {
+          gameContent = `
+            <div class="space-y-6">
+              <div class="bg-slate-800 p-6 rounded-2xl text-center"><h3 class="text-2xl font-bold">${q.q}</h3></div>
+              <div class="grid grid-cols-3 gap-4 max-w-md mx-auto">
+                ${q.options.map((opt, i) => `
+                  <div class="h-28 bg-slate-950 rounded-2xl border-4 border-slate-800 flex items-end justify-center p-1 overflow-hidden">
+                    <button onclick="answerMCQ(${i})" class="w-full h-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl p-2 text-sm">${opt}</button>
                   </div>
-                )}
-                
-                <div className="flex justify-center mt-8 pt-6 border-t border-slate-100">
-                  <button 
-                    onClick={() => { setSelectedSubject(null); setSelectedLevel(null); setNoteData(null); }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-md transition"
-                  >
-                    Pilih Subjek Lain
-                  </button>
-                </div>
+                `).join('')}
               </div>
             </div>
-          </div>
-        );
-      }
-
-      if (!selectedSubject) {
-        return (
-          <div className="p-6 max-w-6xl mx-auto w-full animate-in slide-in-from-right-8">
-            <button onClick={() => setView('student_dash')} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-              ← {t.back_dash}
-            </button>
-            <h2 className="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
-              <i data-lucide="book-open" className="text-indigo-500"></i> Pilih Subjek untuk Nota & Infografik
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {SUBJECTS.map(sub => (
-                <div key={sub} onClick={() => handleSelectSubject(sub)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition cursor-pointer text-center group">
-                  <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <i data-lucide="file-text" className="w-8 h-8"></i>
-                  </div>
-                  <h3 className="font-bold text-slate-700">{sub}</h3>
-                </div>
-              ))}
+          `;
+        } else if (state.gameMode === 'riddle') {
+          gameContent = `
+            <div class="space-y-6 text-center">
+              <div class="bg-slate-800 p-6 rounded-2xl"><h3 class="text-2xl font-bold text-orange-400 italic">"${q.riddle}"</h3></div>
+              <div class="text-3xl font-black tracking-widest bg-slate-800 p-4 rounded-xl inline-block text-orange-400">${q.answer}</div>
+              <div class="pt-4"><button onclick="answerMCQ(0)" class="bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-3 rounded-xl">Saya Faham Jawapan!</button></div>
             </div>
-          </div>
-        );
-      }
+          `;
+        }
 
-      return (
-        <div className="p-6 max-w-4xl mx-auto w-full animate-in zoom-in">
-          <button onClick={() => setSelectedSubject(null)} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-            ← {t.back}
-          </button>
-          <h2 className="text-3xl font-bold text-slate-800 mb-8 text-center bg-white py-4 rounded-2xl shadow-sm border border-slate-100">
-            {t.select_level_title} <span className="text-indigo-600">{selectedSubject}</span>
-          </h2>
-          <div className="grid md:grid-cols-2 gap-6">
-             <div onClick={() => handleSelectLevel('tahap1')} className="bg-gradient-to-br from-green-400 to-green-600 text-white p-10 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-               <h3 className="text-3xl font-bold mb-2">{t.level_1}</h3>
-             </div>
-             <div onClick={() => handleSelectLevel('tahap2')} className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-10 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-               <h3 className="text-3xl font-bold mb-2">{t.level_2}</h3>
-             </div>
+        app.innerHTML = `
+          <div class="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border-4 border-slate-700 space-y-6 max-w-4xl mx-auto">
+            <div class="flex justify-between items-center text-sm sm:text-base font-bold">
+              <span class="text-indigo-400">Soalan ${state.currentQ + 1}/${questions.length}</span>
+              <div class="flex gap-4">
+                <span class="text-yellow-400">Skor: ${state.score}</span>
+                <span class="text-red-400">Nyawa: ${'❤️'.repeat(state.lives)}</span>
+              </div>
+            </div>
+            ${gameContent}
           </div>
-        </div>
-      );
+        `;
+      }
     }
 
-    // --- GAME VIEW (FULLY INTERACTIVE 3 GAME MODES) ---
-    function GameView({ setView, t }) {
-      const [playerName, setPlayerName] = useState('');
-      const [isNameSet, setIsNameSet] = useState(false);
-      const [subject, setSubject] = useState(null);
-      const [level, setLevel] = useState(null);
-      const [gameMode, setGameMode] = useState(null); // 'mcq', 'whack', 'riddle'
-
-      if (!isNameSet) {
-        return (
-          <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
-            <div className="bg-white p-10 rounded-3xl shadow-xl text-center max-w-md w-full animate-in zoom-in">
-              <i data-lucide="gamepad-2" className="w-16 h-16 text-pink-500 mx-auto mb-4"></i>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">{t.player_name}</h2>
-              <input 
-                type="text" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-6 focus:outline-none focus:ring-2 focus:ring-pink-500 text-center font-bold"
-                placeholder="Cth: Amir"
-                value={playerName}
-                onChange={e => setPlayerName(e.target.value)}
-              />
-              <button 
-                disabled={!playerName.trim()}
-                onClick={() => setIsNameSet(true)}
-                className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition shadow-md"
-              >
-                {t.start_game}
-              </button>
-            </div>
-          </div>
-        );
-      }
-
-      if (!subject) {
-        return (
-          <div className="p-6 max-w-6xl mx-auto w-full animate-in slide-in-from-right-8">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setView('student_dash')} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium">
-                ← {t.back_dash}
-              </button>
-              <div className="bg-pink-100 text-pink-700 px-4 py-1 rounded-full font-bold text-sm">Pemain: {playerName}</div>
-            </div>
-            <h2 className="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
-              <i data-lucide="gamepad-2" className="text-pink-500"></i> Pilih Subjek Untuk Bermain
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {SUBJECTS.map(sub => (
-                <div key={sub} onClick={() => setSubject(sub)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-pink-300 hover:shadow-lg transition cursor-pointer text-center group">
-                  <div className="w-16 h-16 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <i data-lucide="gamepad-2" className="w-8 h-8"></i>
-                  </div>
-                  <h3 className="font-bold text-slate-700">{sub}</h3>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      }
-
-      if (!level) {
-        return (
-          <div className="p-6 max-w-4xl mx-auto w-full animate-in zoom-in">
-            <button onClick={() => setSubject(null)} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-              ← {t.back}
-            </button>
-            <h2 className="text-3xl font-bold text-slate-800 mb-8 text-center bg-white py-4 rounded-2xl shadow-sm border border-slate-100">
-              {t.select_level_title} <span className="text-blue-600">{subject}</span>
-            </h2>
-            <div className="grid md:grid-cols-2 gap-6">
-               <div onClick={() => setLevel('tahap1')} className="bg-gradient-to-br from-green-400 to-green-600 text-white p-10 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-                 <h3 className="text-3xl font-bold mb-2">{t.level_1}</h3>
-               </div>
-               <div onClick={() => setLevel('tahap2')} className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-10 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-                 <h3 className="text-3xl font-bold mb-2">{t.level_2}</h3>
-               </div>
-            </div>
-          </div>
-        );
-      }
-
-      if (!gameMode) {
-        return (
-          <div className="p-6 max-w-5xl mx-auto w-full animate-in zoom-in">
-             <button onClick={() => setLevel(null)} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-              ← {t.change_level}
-            </button>
-            <h2 className="text-3xl font-bold text-slate-800 mb-8 text-center bg-white py-4 rounded-2xl shadow-sm border border-slate-100">
-              {t.ai_game_title}: <span className="text-blue-600">{subject}</span>
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6">
-               <div onClick={() => setGameMode('mcq')} className="bg-blue-600 text-white p-8 rounded-3xl cursor-pointer hover:-translate-y-2 transition-all shadow-xl text-center border-b-8 border-black/20">
-                 <div className="text-6xl mb-6 bg-white/20 w-24 h-24 mx-auto rounded-full flex items-center justify-center">🚀</div>
-                 <h3 className="text-2xl font-bold mb-3">{t.mode_mcq}</h3>
-                 <p className="text-white/90">{t.mode_mcq_desc}</p>
-               </div>
-               <div onClick={() => setGameMode('whack')} className="bg-emerald-600 text-white p-8 rounded-3xl cursor-pointer hover:-translate-y-2 transition-all shadow-xl text-center border-b-8 border-black/20">
-                 <div className="text-6xl mb-6 bg-white/20 w-24 h-24 mx-auto rounded-full flex items-center justify-center">🔨</div>
-                 <h3 className="text-2xl font-bold mb-3">{t.mode_whack}</h3>
-                 <p className="text-white/90">{t.mode_whack_desc}</p>
-               </div>
-               <div onClick={() => setGameMode('riddle')} className="bg-orange-500 text-white p-8 rounded-3xl cursor-pointer hover:-translate-y-2 transition-all shadow-xl text-center border-b-8 border-black/20">
-                 <div className="text-6xl mb-6 bg-white/20 w-24 h-24 mx-auto rounded-full flex items-center justify-center">🧩</div>
-                 <h3 className="text-2xl font-bold mb-3">{t.mode_riddle}</h3>
-                 <p className="text-white/90">{t.mode_riddle_desc}</p>
-               </div>
-            </div>
-          </div>
-        );
-      }
-
-      return <ActiveGameEngine subject={subject} level={level} gameMode={gameMode} playerName={playerName} goBack={() => setGameMode(null)} t={t} />;
+    // --- ACTIONS ---
+    function selectSubjectNotes(sub) {
+      state.subject = sub;
+      navigate('notes_view');
     }
 
-    // --- ACTIVE GAME ENGINE (MCQ, WHACK, RIDDLE) ---
-    function ActiveGameEngine({ subject, level, gameMode, playerName, goBack, t }) {
-      const [currentQ, setCurrentQ] = useState(0);
-      const [score, setScore] = useState(0);
-      const [lives, setLives] = useState(3);
-      const [feedback, setFeedback] = useState(null);
-      const [gameOver, setGameOver] = useState(false);
-
-      // Riddles State
-      const [guessedLetters, setGuessedLetters] = useState([]);
-      const [riddleMistakes, setRiddleMistakes] = useState(0);
-
-      // Whack State
-      const [activeMoles, setActiveMoles] = useState([]);
-
-      const questions = SAMPLE_GAMES[gameMode] || SAMPLE_GAMES.mcq;
-      const q = questions[currentQ];
-
-      // Whack Mole Loop
-      useEffect(() => {
-        if (gameMode === 'whack' && !feedback && !gameOver) {
-          const interval = setInterval(() => {
-            const currentItem = questions[currentQ];
-            if (!currentItem) return;
-            const options = currentItem.options.map((opt, i) => ({ text: opt, isCorrect: i === currentItem.correct, originalIndex: i }));
-            options.sort(() => Math.random() - 0.5);
-            const holes = [0, 1, 2, 3, 4, 5].sort(() => Math.random() - 0.5).slice(0, 3);
-            const newMoles = holes.map((holeId, idx) => ({ holeId, ...options[idx] }));
-            setActiveMoles(newMoles);
-          }, 2000);
-          return () => clearInterval(interval);
-        }
-      }, [gameMode, currentQ, feedback, gameOver]);
-
-      const handleAnswer = (index) => {
-        if (feedback || gameOver) return;
-        if (index === q.correct) {
-          playSFX('correct');
-          setScore(score + 20);
-          setFeedback({ isCorrect: true, text: `${t.congrats} ${q.trivia}` });
-        } else {
-          playSFX('wrong');
-          const newLives = lives - 1;
-          setLives(newLives);
-          setFeedback({ isCorrect: false, text: `${t.oops} ${q.trivia}` });
-        }
-      };
-
-      const handleLetterGuess = (letter) => {
-        if (feedback || gameOver || guessedLetters.includes(letter)) return;
-        const word = (q.answer_word || "").toUpperCase();
-        const newGuessed = [...guessedLetters, letter];
-        setGuessedLetters(newGuessed);
-
-        if (!word.includes(letter)) {
-          playSFX('wrong');
-          const newMistakes = riddleMistakes + 1;
-          setRiddleMistakes(newMistakes);
-          if (newMistakes >= 5) {
-            const newLives = lives - 1;
-            setLives(newLives);
-            setFeedback({ isCorrect: false, text: `${t.oops} Jawapan: ${word}. ${q.trivia}` });
-          }
-        } else {
-          playSFX('correct');
-          const isWin = word.split('').every(char => newGuessed.includes(char));
-          if (isWin) {
-            setScore(score + 30);
-            setFeedback({ isCorrect: true, text: `${t.congrats} ${q.trivia}` });
-          }
-        }
-      };
-
-      const handleNext = () => {
-        setFeedback(null);
-        setActiveMoles([]);
-        setGuessedLetters([]);
-        setRiddleMistakes(0);
-
-        if (lives <= 0 || currentQ >= questions.length - 1) {
-          playSFX('over');
-          setGameOver(true);
-        } else {
-          setCurrentQ(currentQ + 1);
-        }
-      };
-
-      if (gameOver) {
-        return (
-          <div className="p-6 max-w-md mx-auto text-center bg-slate-900 text-white rounded-3xl my-10 p-10 shadow-2xl animate-in zoom-in">
-            <div className="text-6xl mb-4">🏆</div>
-            <h2 className="text-3xl font-extrabold mb-2">Permainan Tamat!</h2>
-            <p className="text-slate-400 mb-6">Pemain: {playerName}</p>
-            <div className="text-5xl font-black text-yellow-400 mb-8">{score} <span className="text-lg text-slate-300">Mata</span></div>
-            <button 
-              onClick={goBack}
-              className="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transition"
-            >
-              Main Semula
-            </button>
-          </div>
-        );
-      }
-
-      return (
-        <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full animate-in zoom-in-95">
-          <button onClick={goBack} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
-            ← {t.back}
-          </button>
-
-          <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-2xl relative border-4 border-slate-700">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-indigo-400 font-bold">{subject} • Soalan {currentQ + 1}/{questions.length}</span>
-              <div className="flex gap-4">
-                <span className="text-yellow-400 font-bold">Skor: {score}</span>
-                <span className="text-red-400 font-bold">Nyawa: {'❤️'.repeat(lives)}</span>
-              </div>
-            </div>
-
-            {/* MCQ MODE */}
-            {gameMode === 'mcq' && (
-              <div className="space-y-6">
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                  <h3 className="text-2xl font-bold text-center">{q.q}</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {q.options.map((opt, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => handleAnswer(i)}
-                      className="p-4 bg-slate-800 hover:bg-indigo-600 border border-slate-700 rounded-xl font-bold transition text-lg"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* WHACK MODE */}
-            {gameMode === 'whack' && (
-              <div className="space-y-6">
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 text-center">
-                  <h3 className="text-2xl font-bold">{q.q}</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-xl mx-auto">
-                  {[0, 1, 2, 3, 4, 5].map(holeId => {
-                    const mole = activeMoles.find(m => m.holeId === holeId);
-                    return (
-                      <div key={holeId} className="h-32 bg-slate-950 rounded-2xl border-4 border-slate-800 flex items-end justify-center overflow-hidden p-1">
-                        {mole && (
-                          <button 
-                            onClick={() => handleAnswer(mole.originalIndex)}
-                            className="w-full h-full bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold rounded-xl p-2 text-sm sm:text-base transition animate-in slide-in-from-bottom"
-                          >
-                            {mole.text}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* RIDDLE MODE */}
-            {gameMode === 'riddle' && (
-              <div className="space-y-6 text-center">
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                  <h3 className="text-2xl font-bold text-orange-400 italic">"{q.riddle}"</h3>
-                </div>
-                
-                <div className="flex justify-center gap-2">
-                  {(q.answer_word || "").split('').map((char, i) => (
-                    <div key={i} className="w-12 h-14 bg-slate-800 border-2 border-orange-500 rounded-lg flex items-center justify-center text-2xl font-black">
-                      {guessedLetters.includes(char) ? char : '_'}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto pt-4">
-                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('').map(letter => (
-                    <button 
-                      key={letter}
-                      onClick={() => handleLetterGuess(letter)}
-                      disabled={guessedLetters.includes(letter)}
-                      className={`w-10 h-10 rounded-lg font-bold ${guessedLetters.includes(letter) ? 'bg-slate-800 text-slate-600' : 'bg-slate-700 hover:bg-white hover:text-slate-900 text-white'}`}
-                    >
-                      {letter}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* FEEDBACK MODAL */}
-            {feedback && (
-              <div className="absolute inset-0 bg-slate-950/90 rounded-3xl flex items-center justify-center p-6 z-20">
-                <div className="bg-slate-800 p-8 rounded-2xl border border-slate-600 text-center max-w-sm w-full">
-                  <h3 className={`text-3xl font-extrabold mb-4 ${feedback.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                    {feedback.isCorrect ? t.congrats : t.oops}
-                  </h3>
-                  <p className="text-slate-300 mb-6">{feedback.text}</p>
-                  <button 
-                    onClick={handleNext}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition"
-                  >
-                    {t.next_challenge}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
+    function setPlayerName() {
+      const val = document.getElementById('pNameInput').value;
+      if (val.trim()) state.playerName = val;
+      navigate('game_mode');
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    function startGame(mode) {
+      state.gameMode = mode;
+      state.score = 0;
+      state.lives = 3;
+      state.currentQ = 0;
+      navigate('game_play');
+    }
+
+    function answerMCQ(index) {
+      const questions = SAMPLE_GAMES[state.gameMode] || SAMPLE_GAMES.mcq;
+      const q = questions[state.currentQ];
+      if (index === q.correct || state.gameMode === 'riddle') {
+        playSound('correct');
+        state.score += 20;
+      } else {
+        playSound('wrong');
+        state.lives -= 1;
+      }
+      state.currentQ += 1;
+      render();
+    }
+
+    // INITIAL RENDER
+    render();
   </script>
 </body>
 </html>
+```
