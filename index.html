@@ -1,22 +1,112 @@
 <!DOCTYPE html>
 <html lang="ms">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SIRISNO Edu</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & Babel CDNs -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-  </head>
-  <body class="bg-slate-50">
-    <div id="root"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SIRISNO Edu</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <div id="root"></div>
 
-    <!-- Panggil fail App.jsx anda -->
-    <script type="text/babel" src="./App.jsx"></script>
-  </body>
+  <script>
+    const e = React.createElement;
+
+    function App() {
+      const [role, setRole] = React.useState(null);
+      const [view, setView] = React.useState('home');
+
+      React.useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [view, role]);
+
+      return e('div', { className: 'min-h-screen flex flex-col justify-between' },
+        // Header / Navigation
+        e('nav', { className: 'bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-40' },
+          e('div', { className: 'flex items-center gap-2 cursor-pointer', onClick: () => setView('home') },
+            e('i', { 'data-lucide': 'graduation-cap', className: 'w-8 h-8 text-blue-600' }),
+            e('span', { className: 'text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500' }, 'SIRISNO Edu')
+          ),
+          role && e('button', { 
+            onClick: () => setRole(null), 
+            className: 'text-red-500 hover:bg-red-50 p-2 rounded-full font-bold flex items-center gap-1 text-sm' 
+          }, 'Log Keluar')
+        ),
+
+        // Main Content Area
+        e('main', { className: 'flex-1 flex flex-col items-center justify-center p-6 text-center' },
+          view === 'home' && e('div', { className: 'max-w-3xl space-y-6 animate-in fade-in' },
+            e('h1', { className: 'text-4xl sm:text-6xl font-extrabold text-slate-900 leading-tight' },
+              'Pendidikan Interaktif & ',
+              e('span', { className: 'text-blue-600 block sm:inline' }, 'SIRISNO Edu')
+            ),
+            e('p', { className: 'text-lg text-slate-600 max-w-xl mx-auto' }, 
+              'Platform pembelajaran digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif, infografik AI, dan permainan merangsang minda.'
+            ),
+            e('div', { className: 'flex flex-col sm:flex-row justify-center gap-4 pt-4' },
+              e('button', { 
+                onClick: () => { setRole('student'); setView('student_dash'); },
+                className: 'bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-blue-500/20 text-lg transition transform active:scale-95'
+              }, '🚀 Masuk Sebagai Murid'),
+              e('button', { 
+                onClick: () => { setRole('teacher'); setView('teacher_dash'); },
+                className: 'bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-800 font-bold py-4 px-8 rounded-2xl text-lg transition transform active:scale-95'
+              }, '👨‍🏫 Portal Guru')
+            )
+          ),
+
+          view === 'student_dash' && e('div', { className: 'max-w-4xl w-full space-y-6 text-left animate-in slide-in-from-bottom' },
+            e('div', { className: 'flex items-center justify-between' },
+              e('h2', { className: 'text-3xl font-bold text-slate-800' }, 'Selamat Datang, Murid Pintar! 🚀'),
+              e('button', { onClick: () => setView('home'), className: 'text-sm font-semibold text-slate-500 hover:text-slate-800' }, '← Utama')
+            ),
+            e('div', { className: 'grid md:grid-cols-2 gap-6 pt-4' },
+              e('div', { 
+                onClick: () => alert('Nota & Infografik AI sedia dilancarkan!'),
+                className: 'bg-indigo-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl space-y-3'
+              },
+                e('i', { 'data-lucide': 'book-open', className: 'w-12 h-12' }),
+                e('h3', { className: 'text-2xl font-bold' }, 'Nota & Infografik'),
+                e('p', { className: 'text-indigo-100' }, 'Ulang kaji subjek teras & elektif KPM dengan imej AI.')
+              ),
+              e('div', { 
+                onClick: () => alert('Permainan Digital AI sedia dimainkan!'),
+                className: 'bg-pink-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl space-y-3'
+              },
+                e('i', { 'data-lucide': 'gamepad-2', className: 'w-12 h-12' }),
+                e('h3', { className: 'text-2xl font-bold' }, 'Permainan Digital AI'),
+                e('p', { className: 'text-pink-100' }, 'Mod Ketuk Jawapan Pintar & Teka-Teki.')
+              )
+            )
+          ),
+
+          view === 'teacher_dash' && e('div', { className: 'max-w-2xl w-full text-center space-y-6' },
+            e('h2', { className: 'text-3xl font-bold text-slate-800' }, 'Portal Guru SIRISNO Edu 👨‍🏫'),
+            e('p', { className: 'text-slate-600' }, 'Sistem pengurusan kuiz dan analisis murid.'),
+            e('button', { 
+              onClick: () => setView('home'),
+              className: 'bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-6 py-3 rounded-xl'
+            }, 'Kembali ke Utamapage')
+          )
+        ),
+
+        // Footer
+        e('footer', { className: 'bg-slate-900 text-slate-400 py-4 text-center text-sm' },
+          '© 2026 SIRISNO Edu. KPM Syllabus Aligned. Hak Cipta Terpelihara.'
+        )
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(e(App));
+  </script>
+</body>
 </html>
