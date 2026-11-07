@@ -6,107 +6,684 @@
   <title>SIRISNO Edu</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM -->
+  <!-- React & ReactDOM CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel Standalone untuk membaca JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-pulse-slow { animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-blue-200">
   <div id="root"></div>
 
-  <script>
-    const e = React.createElement;
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
+    // --- LOFI MUSIC GENERATOR (Web Audio API) ---
+    class LofiGenerator {
+      constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        this.masterGain = null;
+        this.nextNoteTime = 0;
+        this.currentChord = 0;
+        this.timerID = null;
+        
+        this.chords = [
+          [130.81, 164.81, 196.00, 246.94, 293.66], // Cmaj9
+          [174.61, 220.00, 261.63, 329.63, 392.00], // Fmaj9
+          [196.00, 246.94, 293.66, 329.63, 392.00], // G6
+          [110.00, 130.81, 164.81, 196.00, 246.94]  // Am9
+        ];
+      }
+
+      initContext() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.value = 0.15;
+          this.masterGain.connect(this.ctx.destination);
+        }
+      }
+
+      playChord(chordIndex, time) {
+        const chord = this.chords[chordIndex];
+        chord.forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = i === 0 ? 'triangle' : 'sine';
+          osc.frequency.value = freq;
+          
+          gain.gain.setValueAtTime(0, time);
+          gain.gain.linearRampToValueAtTime(0.15, time + 0.5 + (i * 0.1));
+          gain.gain.exponentialRampToValueAtTime(0.001, time + 4.0);
+          
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          
+          osc.start(time);
+          osc.stop(time + 4.5);
+        });
+
+        if (Math.random() > 0.3) {
+            const sparkleOsc = this.ctx.createOscillator();
+            const sparkleGain = this.ctx.createGain();
+            sparkleOsc.type = 'sine';
+            sparkleOsc.frequency.value = chord[Math.floor(Math.random() * chord.length)] * (Math.random() > 0.5 ? 2 : 4); 
+            sparkleGain.gain.setValueAtTime(0, time + 1.0); 
+            sparkleGain.gain.linearRampToValueAtTime(0.05, time + 1.5);
+            sparkleGain.gain.exponentialRampToValueAtTime(0.001, time + 3.0);
+            sparkleOsc.connect(sparkleGain);
+            sparkleGain.connect(this.masterGain);
+            sparkleOsc.start(time + 1.0);
+            sparkleOsc.stop(time + 3.0);
+        }
+      }
+
+      scheduler() {
+        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+          this.playChord(this.currentChord, this.nextNoteTime);
+          this.nextNoteTime += 4.0;
+          this.currentChord = (this.currentChord + 1) % this.chords.length;
+        }
+        this.timerID = requestAnimationFrame(this.scheduler.bind(this));
+      }
+
+      toggle() {
+        this.initContext();
+        if (this.isPlaying) {
+          cancelAnimationFrame(this.timerID);
+          this.ctx.suspend();
+          this.isPlaying = false;
+        } else {
+          this.ctx.resume();
+          this.nextNoteTime = this.ctx.currentTime + 0.1;
+          this.scheduler();
+          this.isPlaying = true;
+        }
+        return this.isPlaying;
+      }
+    }
+
+    // --- SFX GENERATOR ---
+    const playSFX = (type) => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        const now = ctx.currentTime;
+        if (type === 'hit' || type === 'correct') {
+           osc.type = 'sine';
+           osc.frequency.setValueAtTime(600, now);
+           osc.frequency.setValueAtTime(1200, now + 0.1);
+           gain.gain.setValueAtTime(0.3, now);
+           gain.gain.linearRampToValueAtTime(0, now + 0.3);
+           osc.start(now);
+           osc.stop(now + 0.3);
+        } else if (type === 'wrong') {
+           osc.type = 'sawtooth';
+           osc.frequency.setValueAtTime(250, now);
+           osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+           gain.gain.setValueAtTime(0.3, now);
+           gain.gain.linearRampToValueAtTime(0, now + 0.3);
+           osc.start(now);
+           osc.stop(now + 0.3);
+        } else if (type === 'over') {
+           osc.type = 'square';
+           osc.frequency.setValueAtTime(150, now);
+           osc.frequency.exponentialRampToValueAtTime(50, now + 1.0);
+           gain.gain.setValueAtTime(0.3, now);
+           gain.gain.linearRampToValueAtTime(0, now + 1.0);
+           osc.start(now);
+           osc.stop(now + 1.0);
+        }
+      } catch(e) {}
+    };
+
+    // --- ARCADE BGM GENERATOR ---
+    class ArcadeBGM {
+      constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        this.masterGain = null;
+        this.nextNoteTime = 0;
+        this.currentNote = 0;
+        this.timerID = null;
+        
+        this.notes = [
+          [261.63, 329.63, 392.00, 523.25], // C maj
+          [261.63, 329.63, 392.00, 523.25], 
+          [174.61, 220.00, 261.63, 349.23], // F maj
+          [196.00, 246.94, 293.66, 392.00]  // G maj
+        ];
+        this.chordIndex = 0;
+      }
+
+      initContext() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.value = 0.03;
+          this.masterGain.connect(this.ctx.destination);
+        }
+      }
+
+      scheduler() {
+        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'square';
+          osc.frequency.value = this.notes[this.chordIndex][this.currentNote];
+          
+          gain.gain.setValueAtTime(0, this.nextNoteTime);
+          gain.gain.linearRampToValueAtTime(0.1, this.nextNoteTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.nextNoteTime + 0.15);
+          
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(this.nextNoteTime);
+          osc.stop(this.nextNoteTime + 0.15);
+
+          this.currentNote++;
+          if (this.currentNote >= 4) {
+              this.currentNote = 0;
+              if (Math.random() > 0.7) {
+                  this.chordIndex = (this.chordIndex + 1) % this.notes.length;
+              }
+          }
+          this.nextNoteTime += 0.15; 
+        }
+        this.timerID = requestAnimationFrame(this.scheduler.bind(this));
+      }
+
+      start() {
+        this.initContext();
+        if (!this.isPlaying) {
+          this.ctx.resume();
+          this.nextNoteTime = this.ctx.currentTime + 0.1;
+          this.scheduler();
+          this.isPlaying = true;
+        }
+      }
+
+      stop() {
+        if (this.isPlaying && this.ctx) {
+          cancelAnimationFrame(this.timerID);
+          this.ctx.suspend();
+          this.isPlaying = false;
+        }
+      }
+    }
+
+    // --- DATA HELPERS ---
+    const SUBJECTS = ['Bahasa Melayu', 'Sains', 'Matematik', 'Sejarah', 'Pendidikan Islam', 'Bahasa Arab', 'PJPK', 'Muzik', 'RBT', 'PSV'];
+
+    const TRANSLATIONS = {
+      ms: { 
+        student: 'Murid', teacher: 'Guru', portal_teacher: 'Portal Guru', portal_student: 'Portal Murid', logout: 'Log Keluar',
+        hero_title: 'Pendidikan Interaktif &\n Menyeronokkan dengan', hero_sub: 'Platform pembelajaran digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif, permainan merangsang minda, dan portal guru yang efisien.',
+        login_student: 'Masuk Sebagai Murid', login_teacher: 'Masuk Sebagai Guru',
+        feat1_title: 'Nota & Infografik', feat1_desc: 'Terokai nota dan infografik pintar yang dijana khas oleh AI merangkumi pelbagai subjek teras KPM dengan visual yang menarik.',
+        feat2_title: 'Permainan Digital AI', feat2_desc: 'Rangsang minda dengan pelbagai mod permainan yang dijana secara pintar oleh AI.',
+        feat3_title: 'Analisis Prestasi', feat3_desc: 'Guru boleh memantau pencapaian murid secara langsung melalui penjana kuiz dan carta analisis.',
+        welcome: 'Selamat Datang, Murid Pintar! 🚀', choose_activity: 'Pilih aktiviti pembelajaran anda hari ini.',
+        notes: 'Nota & Infografik', notes_desc: 'Ulang kaji subjek teras & elektif KPM.',
+        games: 'Permainan Digital AI', games_desc: 'Cabaran minda 3 Mod Pintar.',
+        uasa: 'Latihan UASA (2018-Kini)', uasa_desc: 'Koleksi soalan peperiksaan lepas.',
+        live_quiz: 'Kuiz Langsung (Dari Guru)', no_quiz: 'Belum ada kuiz yang diterbitkan oleh guru buat masa ini.',
+        questions: 'Soalan', created_by: 'Ciptaan Guru',
+        teacher_portal: 'Portal Guru', create_quiz: 'Cipta Kuiz Baru', manage_quiz: 'Urus Kuiz', analytics: 'Analisis Prestasi',
+        ai_title: 'Penjana Kuiz & Gambar Automatik', ai_desc: 'Bina berpuluh soalan sekaligus. AI akan memproses jumlah, bahasa, dan turut menjana gambar ilustrasi!',
+        ai_placeholder: 'Cth: "Hasilkan 10 soalan sejarah tahun 5 dan sediakan gambar untuk setiap soalan"',
+        ai_btn: 'Jana AI', ai_generating: 'Menjana...',
+        quiz_title: 'Tajuk Kuiz', quiz_subject: 'Subjek',
+        add_question: 'Tambah Soalan', publish: 'Terbitkan Kuiz', publishing: 'Menerbitkan...',
+        no_published: 'Tiada kuiz diterbitkan lagi.', delete: 'Padam',
+        no_records: 'Belum ada rekod jawapan murid.',
+        date: 'Tarikh', student_name: 'Nama Murid', class_name: 'Kelas', subject: 'Subjek', score: 'Markah', status: 'Status',
+        pass: 'LULUS', fail: 'GAGAL',
+        enter_name: 'Sila Masukkan Nama Anda', enter_class: 'Masukkan Nama Kelas Anda', start_quiz: 'Mula Kuiz', submit_answers: 'Hantar Jawapan', next: 'Seterusnya',
+        back: 'Kembali', back_dash: 'Kembali ke Dashboard', game_title: 'Cabaran Minda', game_sub: 'Jawab pantas untuk kumpul mata!', game_score: 'Skor Terkumpul:', game_ans: 'Jawab',
+        player_name: 'Masukkan Nama Pemain', start_game: 'Mula Bermain', leaderboard: 'Carta Kedudukan', level_1: 'Tahap 1 (Tahun 1-3)', level_2: 'Tahap 2 (Tahun 4-6)',
+        music_on: 'Muzik Tenang: Aktif', music_off: 'Muzik Tenang: Mati',
+        ai_game_title: 'Pilih Mod Permainan AI',
+        ai_game_sub: 'Pilih jenis cabaran AI untuk subjek',
+        mode_mcq: 'Pengembaraan Fakta',
+        mode_mcq_desc: 'Lawan masa! Jawab cabaran fakta secepat mungkin sebelum masa tamat.',
+        mode_whack: 'Ketuk Jawapan Pintar',
+        mode_whack_desc: 'Uji refleks anda! Ketuk pilihan jawapan yang tepat apabila ia muncul dari lubang.',
+        mode_riddle: 'Teka-Teki Pintar',
+        mode_riddle_desc: 'Main teka huruf rahsia! Jangan sampai salah teka 5 kali atau anda kalah!',
+        generating_title: 'MEMUATKAN GAME...',
+        generating_notes: 'MENJANA INFOGRAFIK PINTAR...',
+        out_of_lives: 'Anda telah kehabisan nyawa!',
+        final_score: 'Skor Akhir Anda:',
+        play_again: 'Main Semula',
+        congrats: 'Tahniah!',
+        oops: 'Aduh!',
+        next_challenge: 'Teruskan Cabaran',
+        see_results: 'Lihat Keputusan Akhir',
+        start_gen: 'Mula Jana & Bermain!',
+        level_text: 'Tahap',
+        score_text: 'Skor',
+        life_text: 'Nyawa',
+        select_level_title: 'Pilih Tahap:',
+        change_level: 'Tukar Tahap',
+        time_out: 'Masa Tamat!',
+        guess_word: 'Teka Perkataan Rahsia:'
+      },
+      en: { 
+        student: 'Student', teacher: 'Teacher', portal_teacher: 'Teacher Portal', portal_student: 'Student Portal', logout: 'Logout',
+        hero_title: 'Interactive & Fun\n Education with', hero_sub: 'Digital learning platform based on the KPM syllabus (Years 1-6). Featuring interactive notes, AI games, and an efficient teacher portal.',
+        login_student: 'Login as Student', login_teacher: 'Login as Teacher',
+        feat1_title: 'Notes & Infographics', feat1_desc: 'Explore smart notes and infographics tailored by AI for various KPM core subjects with engaging visuals.',
+        feat2_title: 'AI Digital Games', feat2_desc: 'Stimulate your mind with various game modes smartly generated by AI.',
+        feat3_title: 'Performance Analytics', feat3_desc: 'Teachers can monitor student progress directly via live analytics.',
+        welcome: 'Welcome, Smart Student! 🚀', choose_activity: 'Choose your learning activity today.',
+        notes: 'Notes & Infographics', notes_desc: 'Review KPM core & elective subjects.',
+        games: 'AI Digital Games', games_desc: '3 Smart Mind Challenge Modes.',
+        uasa: 'UASA Practice (2018-Now)', uasa_desc: 'Collection of past exam questions.',
+        live_quiz: 'Live Quiz (From Teacher)', no_quiz: 'No quizzes have been published by teachers yet.',
+        questions: 'Questions', created_by: 'Created by Teacher',
+        teacher_portal: 'Teacher Portal', create_quiz: 'Create New Quiz', manage_quiz: 'Manage Quizzes', analytics: 'Performance Analytics',
+        ai_title: 'Auto Quiz & Image Generator', ai_desc: 'Create dozens of questions at once. AI processes the quantity, language, and generates illustrations!',
+        ai_placeholder: 'E.g.: "Generate 10 year 5 history questions and provide an image for each"',
+        ai_btn: 'Generate AI', ai_generating: 'Generating...',
+        quiz_title: 'Quiz Title', quiz_subject: 'Subject',
+        add_question: 'Add Question', publish: 'Publish Quiz', publishing: 'Publishing...',
+        no_published: 'No quizzes published yet.', delete: 'Delete',
+        no_records: 'No student answer records yet.',
+        date: 'Date', student_name: 'Student Name', class_name: 'Class', subject: 'Subject', score: 'Score', status: 'Status',
+        pass: 'PASS', fail: 'FAIL',
+        enter_name: 'Please Enter Your Name', enter_class: 'Enter Your Class Name', start_quiz: 'Start Quiz', submit_answers: 'Submit Answers', next: 'Next',
+        back: 'Back', back_dash: 'Back to Dashboard', game_title: 'Mind Challenge', game_sub: 'Answer fast to collect points!', game_score: 'Total Score:', game_ans: 'Answer',
+        player_name: 'Enter Player Name', start_game: 'Start Playing', leaderboard: 'Leaderboard', level_1: 'Level 1 (Years 1-3)', level_2: 'Level 2 (Years 4-6)',
+        music_on: 'Lofi Music: On', music_off: 'Lofi Music: Off',
+        ai_game_title: 'Select AI Game Mode',
+        ai_game_sub: 'Choose an AI challenge for the subject',
+        mode_mcq: 'Fact Adventure',
+        mode_mcq_desc: 'Race against time! Answer facts as quickly as possible before time runs out.',
+        mode_whack: 'Whack-a-Fact',
+        mode_whack_desc: 'Test your reflexes! Tap the correct answer when it pops out of the hole.',
+        mode_riddle: 'Smart Riddles',
+        mode_riddle_desc: 'Play secret word guess! Guess the letters, don\'t make 5 mistakes or you lose!',
+        generating_title: 'LOADING GAME...',
+        generating_notes: 'GENERATING SMART INFOGRAPHIC...',
+        out_of_lives: 'You have run out of lives!',
+        final_score: 'Your Final Score:',
+        play_again: 'Play Again',
+        congrats: 'Congratulations!',
+        oops: 'Oops!',
+        next_challenge: 'Continue Challenge',
+        see_results: 'View Final Results',
+        start_gen: 'Generate & Play!',
+        level_text: 'Stage',
+        score_text: 'Score',
+        life_text: 'Lives',
+        select_level_title: 'Select Level:',
+        change_level: 'Change Level',
+        time_out: 'Time is Up!',
+        guess_word: 'Guess the Secret Word:'
+      }
+    };
+
+    // --- MAIN APP COMPONENT ---
     function App() {
-      const [role, setRole] = React.useState(null);
-      const [view, setView] = React.useState('home');
+      const [role, setRole] = useState(null); 
+      const [lang, setLang] = useState('ms'); 
+      const [view, setView] = useState('home'); 
+      const [toastMessage, setToastMessage] = useState('');
+      
+      const lofiRef = useRef(null);
+      const [isMusicPlaying, setIsMusicPlaying] = useState(false);
 
-      React.useEffect(() => {
+      useEffect(() => {
+        lofiRef.current = new LofiGenerator();
+      }, []);
+
+      useEffect(() => {
         if (window.lucide) {
           window.lucide.createIcons();
         }
-      }, [view, role]);
+      });
 
-      return e('div', { className: 'min-h-screen flex flex-col justify-between' },
-        // Header / Navigation
-        e('nav', { className: 'bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-40' },
-          e('div', { className: 'flex items-center gap-2 cursor-pointer', onClick: () => setView('home') },
-            e('i', { 'data-lucide': 'graduation-cap', className: 'w-8 h-8 text-blue-600' }),
-            e('span', { className: 'text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500' }, 'SIRISNO Edu')
-          ),
-          role && e('button', { 
-            onClick: () => setRole(null), 
-            className: 'text-red-500 hover:bg-red-50 p-2 rounded-full font-bold flex items-center gap-1 text-sm' 
-          }, 'Log Keluar')
-        ),
+      const toggleMusic = () => {
+        if (lofiRef.current) {
+          const state = lofiRef.current.toggle();
+          setIsMusicPlaying(state);
+          showToast(state ? TRANSLATIONS[lang].music_on : TRANSLATIONS[lang].music_off);
+        }
+      };
 
-        // Main Content Area
-        e('main', { className: 'flex-1 flex flex-col items-center justify-center p-6 text-center' },
-          view === 'home' && e('div', { className: 'max-w-3xl space-y-6 animate-in fade-in' },
-            e('h1', { className: 'text-4xl sm:text-6xl font-extrabold text-slate-900 leading-tight' },
-              'Pendidikan Interaktif & ',
-              e('span', { className: 'text-blue-600 block sm:inline' }, 'SIRISNO Edu')
-            ),
-            e('p', { className: 'text-lg text-slate-600 max-w-xl mx-auto' }, 
-              'Platform pembelajaran digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif, infografik AI, dan permainan merangsang minda.'
-            ),
-            e('div', { className: 'flex flex-col sm:flex-row justify-center gap-4 pt-4' },
-              e('button', { 
-                onClick: () => { setRole('student'); setView('student_dash'); },
-                className: 'bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-blue-500/20 text-lg transition transform active:scale-95'
-              }, '🚀 Masuk Sebagai Murid'),
-              e('button', { 
-                onClick: () => { setRole('teacher'); setView('teacher_dash'); },
-                className: 'bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-800 font-bold py-4 px-8 rounded-2xl text-lg transition transform active:scale-95'
-              }, '👨‍🏫 Portal Guru')
-            )
-          ),
+      const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3000);
+      };
 
-          view === 'student_dash' && e('div', { className: 'max-w-4xl w-full space-y-6 text-left animate-in slide-in-from-bottom' },
-            e('div', { className: 'flex items-center justify-between' },
-              e('h2', { className: 'text-3xl font-bold text-slate-800' }, 'Selamat Datang, Murid Pintar! 🚀'),
-              e('button', { onClick: () => setView('home'), className: 'text-sm font-semibold text-slate-500 hover:text-slate-800' }, '← Utama')
-            ),
-            e('div', { className: 'grid md:grid-cols-2 gap-6 pt-4' },
-              e('div', { 
-                onClick: () => alert('Nota & Infografik AI sedia dilancarkan!'),
-                className: 'bg-indigo-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl space-y-3'
-              },
-                e('i', { 'data-lucide': 'book-open', className: 'w-12 h-12' }),
-                e('h3', { className: 'text-2xl font-bold' }, 'Nota & Infografik'),
-                e('p', { className: 'text-indigo-100' }, 'Ulang kaji subjek teras & elektif KPM dengan imej AI.')
-              ),
-              e('div', { 
-                onClick: () => alert('Permainan Digital AI sedia dimainkan!'),
-                className: 'bg-pink-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl space-y-3'
-              },
-                e('i', { 'data-lucide': 'gamepad-2', className: 'w-12 h-12' }),
-                e('h3', { className: 'text-2xl font-bold' }, 'Permainan Digital AI'),
-                e('p', { className: 'text-pink-100' }, 'Mod Ketuk Jawapan Pintar & Teka-Teki.')
-              )
-            )
-          ),
+      const handleLogin = (selectedRole) => {
+        setRole(selectedRole);
+        setView(selectedRole === 'teacher' ? 'teacher_dash' : 'student_dash');
+      };
 
-          view === 'teacher_dash' && e('div', { className: 'max-w-2xl w-full text-center space-y-6' },
-            e('h2', { className: 'text-3xl font-bold text-slate-800' }, 'Portal Guru SIRISNO Edu 👨‍🏫'),
-            e('p', { className: 'text-slate-600' }, 'Sistem pengurusan kuiz dan analisis murid.'),
-            e('button', { 
-              onClick: () => setView('home'),
-              className: 'bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-6 py-3 rounded-xl'
-            }, 'Kembali ke Utamapage')
-          )
-        ),
+      const handleLogout = () => {
+        setRole(null);
+        setView('home');
+      };
 
-        // Footer
-        e('footer', { className: 'bg-slate-900 text-slate-400 py-4 text-center text-sm' },
-          '© 2026 SIRISNO Edu. KPM Syllabus Aligned. Hak Cipta Terpelihara.'
-        )
+      const t = TRANSLATIONS[lang] || TRANSLATIONS['ms'];
+
+      return (
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col transition-all">
+          <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-40">
+            <div 
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => view !== 'home' && setView(role === 'teacher' ? 'teacher_dash' : 'student_dash')}
+            >
+              <i data-lucide="graduation-cap" className="text-blue-600 w-8 h-8"></i>
+              <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500 hidden sm:block">
+                SIRISNO Edu
+              </span>
+            </div>
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <i data-lucide="globe" className="w-4 h-4"></i>
+                <select 
+                  value={lang} 
+                  onChange={e => setLang(e.target.value)} 
+                  className="bg-transparent border-none outline-none cursor-pointer font-bold hover:text-blue-600 transition"
+                >
+                  <option value="ms">BM</option>
+                  <option value="en">EN</option>
+                </select>
+              </div>
+              <button 
+                onClick={toggleMusic}
+                className={`p-2 rounded-full transition-all flex items-center justify-center ${isMusicPlaying ? 'bg-indigo-100 text-indigo-600 shadow-inner' : 'hover:bg-slate-100 text-slate-400'}`}
+                title="Lofi Study Music"
+              >
+                <i data-lucide={isMusicPlaying ? "music" : "music-2"} className={`w-5 h-5 ${isMusicPlaying ? 'animate-pulse' : ''}`}></i>
+              </button>
+              
+              <div>
+                {!role ? (
+                  <div className="flex gap-2 sm:gap-4">
+                    <button onClick={() => handleLogin('student')} className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-full transition">
+                      <i data-lucide="user" className="w-4 h-4"></i> <span className="hidden sm:block">{t.student}</span>
+                    </button>
+                    <button onClick={() => handleLogin('teacher')} className="flex items-center gap-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-full shadow-md transition">
+                      <i data-lucide="users" className="w-4 h-4"></i> <span className="hidden sm:block">{t.teacher}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 sm:gap-4">
+                    <span className="text-xs sm:text-sm font-medium bg-slate-100 px-3 py-1 rounded-full text-slate-600">
+                      {role === 'teacher' ? t.portal_teacher : t.portal_student}
+                    </span>
+                    <button onClick={handleLogout} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition" title={t.logout}>
+                      <i data-lucide="log-out" className="w-5 h-5"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </nav>
+
+          <main className="flex-1 flex flex-col relative z-10">
+            {view === 'home' && <LandingPage onRoleSelect={handleLogin} t={t} />}
+            {view === 'student_dash' && <StudentDashboard setView={setView} t={t} />}
+            {view === 'teacher_dash' && <TeacherDashboard setView={setView} showToast={showToast} t={t} />}
+            {view === 'notes' && <NotesView setView={setView} t={t} />}
+            {view === 'game' && <GameView setView={setView} t={t} />}
+          </main>
+
+          <footer className="bg-slate-900 text-slate-400 py-6 text-center text-sm relative z-10">
+            <p>&copy; 2026 SIRISNO Edu. KPM Syllabus Aligned. Pembelajaran Digital Interaktif.</p>
+          </footer>
+
+          {toastMessage && (
+            <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-5 z-50">
+              <i data-lucide="check-circle" className="w-5 h-5 text-green-400"></i>
+              {toastMessage}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- LANDING PAGE ---
+    function LandingPage({ onRoleSelect, t }) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-white to-blue-50/50">
+          <div className="max-w-4xl text-center space-y-8 mt-10">
+            <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight whitespace-pre-line">
+              {t.hero_title} <span className="text-blue-600">SIRISNO Edu</span>
+            </h1>
+            <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
+              {t.hero_sub}
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
+              <button 
+                onClick={() => onRoleSelect('student')}
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold py-4 px-8 rounded-2xl shadow-xl shadow-blue-600/20 transition-all hover:scale-105"
+              >
+                <i data-lucide="user" className="w-5 h-5"></i> {t.login_student}
+              </button>
+              <button 
+                onClick={() => onRoleSelect('teacher')}
+                className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 text-lg font-semibold py-4 px-8 rounded-2xl shadow-sm transition-all hover:scale-105"
+              >
+                <i data-lucide="users" className="w-5 h-5"></i> {t.login_teacher}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mt-24 mb-10">
+            <FeatureCard icon="book-open" title={t.feat1_title} desc={t.feat1_desc} color="text-indigo-500" bg="bg-indigo-50" />
+            <FeatureCard icon="gamepad-2" title={t.feat2_title} desc={t.feat2_desc} color="text-pink-500" bg="bg-pink-50" />
+            <FeatureCard icon="activity" title={t.feat3_title} desc={t.feat3_desc} color="text-teal-500" bg="bg-teal-50" />
+          </div>
+        </div>
+      );
+    }
+
+    function FeatureCard({ icon, title, desc, color, bg }) {
+      return (
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition">
+          <div className={`w-14 h-14 ${bg} ${color} rounded-2xl flex items-center justify-center mb-4`}>
+            <i data-lucide={icon} className="w-7 h-7"></i>
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>
+          <p className="text-slate-600 leading-relaxed">{desc}</p>
+        </div>
+      );
+    }
+
+    // --- STUDENT DASHBOARD ---
+    function StudentDashboard({ setView, t }) {
+      return (
+        <div className="p-6 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in">
+          <header className="mb-10">
+            <h2 className="text-3xl font-bold text-slate-800">{t.welcome}</h2>
+            <p className="text-slate-500 mt-2">{t.choose_activity}</p>
+          </header>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <DashboardCard 
+              title={t.notes}
+              desc={t.notes_desc}
+              icon="file-text"
+              color="bg-indigo-500 shadow-indigo-500/30"
+              onClick={() => setView('notes')}
+            />
+            <DashboardCard 
+              title={t.games}
+              desc={t.games_desc}
+              icon="gamepad-2"
+              color="bg-pink-500 shadow-pink-500/30"
+              onClick={() => setView('game')}
+            />
+            <DashboardCard 
+              title={t.uasa}
+              desc={t.uasa_desc}
+              icon="edit-3"
+              color="bg-teal-500 shadow-teal-500/30"
+              onClick={() => alert("Modul UASA akan dibuka hampir dengan tarikh peperiksaan!")}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    function DashboardCard({ title, desc, icon, color, onClick }) {
+      return (
+        <div 
+          onClick={onClick}
+          className={`${color} rounded-3xl p-6 text-white shadow-lg cursor-pointer transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden`}
+        >
+          <div className="absolute -right-4 -top-4 opacity-20 w-32 h-32 bg-white rounded-full"></div>
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6">
+              <i data-lucide={icon} className="w-8 h-8 text-white"></i>
+            </div>
+            <h3 className="text-xl font-bold mb-2">{title}</h3>
+            <p className="text-white/80 font-medium">{desc}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // --- TEACHER DASHBOARD ---
+    function TeacherDashboard({ setView, showToast, t }) {
+      return (
+        <div className="p-6 max-w-4xl mx-auto w-full text-center space-y-6">
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <i data-lucide="users" className="w-16 h-16 text-blue-600 mx-auto"></i>
+            <h2 className="text-3xl font-bold text-slate-800">{t.teacher_portal}</h2>
+            <p className="text-slate-600">{t.ai_desc}</p>
+            <div className="p-4 bg-blue-50 text-blue-700 rounded-xl font-medium">
+              Sistem Log Masuk Rasmi Guru & Pangkalan Data Firestore sedang dikonfigurasikan.
+            </div>
+            <button 
+              onClick={() => setView('home')}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-3 rounded-xl transition"
+            >
+              {t.back_dash}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // --- NOTES VIEW ---
+    function NotesView({ setView, t }) {
+      const [selectedSubject, setSelectedSubject] = useState(null);
+
+      if (!selectedSubject) {
+        return (
+          <div className="p-6 max-w-6xl mx-auto w-full animate-in slide-in-from-right-8">
+            <button onClick={() => setView('student_dash')} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
+              ← {t.back_dash}
+            </button>
+            <h2 className="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+              <i data-lucide="book-open" className="text-indigo-500"></i> Pilih Subjek untuk Nota Pintar AI
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {SUBJECTS.map(sub => (
+                <div key={sub} onClick={() => setSelectedSubject(sub)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition cursor-pointer text-center group">
+                  <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <i data-lucide="file-text" className="w-8 h-8"></i>
+                  </div>
+                  <h3 className="font-bold text-slate-700">{sub}</h3>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-6 max-w-4xl mx-auto w-full text-center">
+          <button onClick={() => setSelectedSubject(null)} className="text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-2 font-medium">
+            ← {t.back}
+          </button>
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <h2 className="text-3xl font-bold text-indigo-600">{selectedSubject}</h2>
+            <p className="text-slate-600">Modul penjanaan nota AI secara automatik sedia digunakan di sini.</p>
+          </div>
+        </div>
+      );
+    }
+
+    // --- GAME VIEW ---
+    function GameView({ setView, t }) {
+      const [playerName, setPlayerName] = useState('');
+      const [isNameSet, setIsNameSet] = useState(false);
+
+      if (!isNameSet) {
+        return (
+          <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
+            <div className="bg-white p-10 rounded-3xl shadow-xl text-center max-w-md w-full animate-in zoom-in">
+              <i data-lucide="gamepad-2" className="w-16 h-16 text-pink-500 mx-auto mb-4"></i>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">{t.player_name}</h2>
+              <input 
+                type="text" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-6 focus:outline-none focus:ring-2 focus:ring-pink-500 text-center font-bold"
+                placeholder="Cth: Amir"
+                value={playerName}
+                onChange={e => setPlayerName(e.target.value)}
+              />
+              <button 
+                disabled={!playerName.trim()}
+                onClick={() => setIsNameSet(true)}
+                className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition shadow-md"
+              >
+                {t.start_game}
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-6 max-w-6xl mx-auto w-full animate-in slide-in-from-right-8">
+          <div className="flex justify-between items-center mb-6">
+            <button onClick={() => setView('student_dash')} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium">
+              ← {t.back_dash}
+            </button>
+            <div className="bg-pink-100 text-pink-700 px-4 py-1 rounded-full font-bold text-sm">Pemain: {playerName}</div>
+          </div>
+          <h2 className="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+            <i data-lucide="gamepad-2" className="text-pink-500"></i> Pilih Subjek Untuk Bermain
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {SUBJECTS.map(sub => (
+              <div key={sub} onClick={() => alert(`Memulakan Permainan ${sub} untuk ${playerName}`)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-pink-300 hover:shadow-lg transition cursor-pointer text-center group">
+                <div className="w-16 h-16 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <i data-lucide="gamepad-2" className="w-8 h-8"></i>
+                </div>
+                <h3 className="font-bold text-slate-700">{sub}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
       );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(e(App));
+    root.render(<App />);
   </script>
 </body>
 </html>
