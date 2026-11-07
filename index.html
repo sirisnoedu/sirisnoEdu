@@ -3,55 +3,107 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>SIRISNO Edu</title>
+  <title>SIRISNO Edu - Platform Pendidikan Digital KPM</title>
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- React 18 & Babel standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
-    .fade-in { animation: fadeIn 0.3s ease-in-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col justify-between">
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
 
-  <!-- NAVBAR -->
-  <nav class="bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
-    <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('home')">
-      <div class="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-md">S</div>
-      <span class="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">SIRISNO Edu</span>
-    </div>
-    <div class="flex items-center gap-3">
-      <button id="lofiBtn" onclick="toggleLofi()" class="p-2.5 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center gap-2 text-sm font-semibold">
-        🎵 <span class="hidden sm:inline">Muzik Lofi</span>
-      </button>
-      <div id="authNav">
-        <button onclick="navigate('student_dash')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm shadow-md transition">Masuk Murid</button>
-      </div>
-    </div>
-  </nav>
+  <div id="root"></div>
 
-  <!-- MAIN CONTAINER -->
-  <main id="app" class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 fade-in"></main>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-  <!-- FOOTER -->
-  <footer class="bg-slate-900 text-slate-400 py-6 text-center text-xs sm:text-sm">
-    <p>&copy; 2026 SIRISNO Edu. Pembelajaran Digital Interaktif KPM.</p>
-  </footer>
+    // --- LOFI AUDIO GENERATOR ---
+    class LofiGenerator {
+      constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        this.chords = [
+          [130.81, 164.81, 196.00, 246.94, 293.66], // Cmaj9
+          [174.61, 220.00, 261.63, 329.63, 392.00], // Fmaj9
+          [196.00, 246.94, 293.66, 329.63, 392.00], // G6
+          [110.00, 130.81, 164.81, 196.00, 246.94]  // Am9
+        ];
+        this.currentChord = 0;
+        this.timerID = null;
+      }
+      init() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+      }
+      playChord() {
+        if (!this.ctx || !this.isPlaying) return;
+        const now = this.ctx.currentTime;
+        const chord = this.chords[this.currentChord];
+        chord.forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = i === 0 ? 'triangle' : 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.05, now + 0.4);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 4.0);
+        });
+        this.currentChord = (this.currentChord + 1) % this.chords.length;
+      }
+      toggle() {
+        this.init();
+        if (this.isPlaying) {
+          clearInterval(this.timerID);
+          this.ctx.suspend();
+          this.isPlaying = false;
+        } else {
+          this.ctx.resume();
+          this.isPlaying = true;
+          this.playChord();
+          this.timerID = setInterval(() => this.playChord(), 4000);
+        }
+        return this.isPlaying;
+      }
+    }
 
-  <script>
-    // --- APP STATE ---
-    let state = {
-      view: 'home',
-      role: null,
-      playerName: 'Murid Pintar',
-      subject: null,
-      level: null,
-      gameMode: null,
-      noteData: null,
-      score: 0,
-      lives: 3,
-      currentQ: 0,
-      lofiPlaying: false
+    const playSFX = (type) => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        if (type === 'correct') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523, now);
+          osc.frequency.setValueAtTime(659, now + 0.1);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (type === 'wrong') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        }
+      } catch(e) {}
     };
 
     const SUBJECTS = ['Bahasa Melayu', 'Sains', 'Matematik', 'Sejarah', 'Pendidikan Islam', 'Bahasa Arab', 'PJPK', 'Muzik', 'RBT', 'PSV'];
@@ -70,349 +122,531 @@
         fun_fact: 'Tanpa fotosintesis, bekalan oksigen di Bumi akan berkurangan dengan cepat!'
       },
       'Bahasa Melayu': {
-        title: 'Kata Kerja & Imbuhan',
+        title: 'Kata Kerja & Imbuhan Awalan',
         intro: 'Kata kerja menunjukkan perbuatan atau tindakan yang dilakukan oleh manusia, haiwan, atau benda.',
         points: [
-          { subtitle: 'Kata Kerja Transitif', description: 'Memerlukan objek terus (Contoh: membaca buku).' },
-          { subtitle: 'Kata Kerja Tak Transitif', description: 'Boleh berdiri sendiri (Contoh: tidur, tersenyum).' },
+          { subtitle: 'Kata Kerja Transitif', description: 'Memerlukan objek terus (Contoh: membaca buku, memakan nasi).' },
+          { subtitle: 'Kata Kerja Tak Transitif', description: 'Boleh berdiri sendiri tanpa objek (Contoh: tidur, tersenyum).' },
           { subtitle: 'Imbuhan Men-', description: 'Membentuk kata kerja aktif seperti menulis dan melukis.' },
           { subtitle: 'Imbuhan Di-', description: 'Membentuk kata kerja pasif seperti ditulis dan dimakan.' }
         ],
-        fun_fact: 'Bahasa Melayu mempunyai sistem imbuhan yang sangat kaya dan fleksibel!'
+        fun_fact: 'Bahasa Melayu mempunyai sistem imbuhan yang sangat fleksibel dan kaya!'
+      },
+      'Matematik': {
+        title: 'Pecahan, Perpuluhan & Peratus',
+        intro: 'Memahami hubungan antara pecahan, nombor perpuluhan, dan peratusan dalam kehidupan seharian.',
+        points: [
+          { subtitle: 'Pecahan Wajar', description: 'Pengangka lebih kecil daripada penyebut (Contoh: 1/2, 3/4).' },
+          { subtitle: 'Perpuluhan', description: 'Nombor yang mempunyai titik perpuluhan (Contoh: 0.5, 0.75).' },
+          { subtitle: 'Peratusan', description: 'Nisbah yang menunjukkan bilangan daripada 100 (Contoh: 50%, 75%).' }
+        ],
+        fun_fact: '1/2 adalah sama nilainya dengan 0.5 dan 50%!'
+      },
+      'Sejarah': {
+        title: 'Zaman Air Batu & Perubahannya',
+        intro: 'Zaman Air Batu ialah zaman apabila permukaan bumi dilitupi oleh air batu tebal disebabkan oleh suhu bumi yang sangat dingin.',
+        points: [
+          { subtitle: 'Miosen', description: 'Zaman permulaan pembentukan mamalia dan hutan tebal.' },
+          { subtitle: 'Pliosen', description: 'Padang rumput semakin meluas dan dataran terbentuk.' },
+          { subtitle: 'Pleistosen', description: 'Air batu mula mencair dan manusia purba wujud.' },
+          { subtitle: 'Holosen', description: 'Suhu bumi mula hangat dan tamadun manusia berkembang.' }
+        ],
+        fun_fact: 'Kecairan air batu pada zaman Holosen telah membentuk peta Asia Tenggara yang kita lihat hari ini!'
       }
     };
 
-    const SAMPLE_GAMES = {
-      mcq: [
-        { q: 'Apakah yang diserap oleh akar tumbuhan semasa fotosintesis?', options: ['Air', 'Oksigen', 'Minyak'], correct: 0, trivia: 'Air diangkut dari akar ke daun melalui salur xilem!' },
-        { q: 'Nilai tempat bagi angka 5 dalam 45,210 ialah?', options: ['Ratus', 'Ribu', 'Puluh Ribu'], correct: 1, trivia: 'Angka 5 berada di kedudukan ribu!' },
-        { q: 'Antara berikut, yang manakah Kata Kerja Transitif?', options: ['Membaca buku', 'Tidur nyenyak', 'Tersenyum'], correct: 0, trivia: 'Membaca buku memerlukan objek (buku).' }
+    const GAME_QUESTIONS = {
+      'Sains': [
+        { q: 'Apakah gas yang diserap oleh tumbuhan semasa fotosintesis?', options: ['Karbon Dioksida', 'Oksigen', 'Nitrogen'], correct: 0, trivia: 'Karbon dioksida diserap melalui stoma daun!' },
+        { q: 'Bahagian manakah yang menyerap air dari dalam tanah?', options: ['Akar', 'Batang', 'Bunga'], correct: 0, trivia: 'Akar mempunyai bulu akar halus untuk menyerap air!' },
+        { q: 'Apakah warna pigmen klorofil?', options: ['Hijau', 'Kuning', 'Merah'], correct: 0, trivia: 'Klorofil memberi warna hijau pada daun!' }
       ],
-      whack: [
-        { q: 'Ketuk gas yang dibebaskan semasa fotosintesis:', options: ['Oksigen', 'Karbon Dioksida', 'Nitrogen'], correct: 0, trivia: 'Oksigen dibebaskan untuk kita bernafas!' },
-        { q: 'Ketuk jawapan bagi 12 × 4:', options: ['48', '44', '52'], correct: 0, trivia: '12 darab 4 ialah 48!' }
+      'Bahasa Melayu': [
+        { q: 'Antara berikut, yang manakah Kata Kerja Transitif?', options: ['Membaca buku', 'Tidur nyenyak', 'Tersenyum gembira'], correct: 0, trivia: 'Membaca memerlukan objek "buku".' },
+        { q: 'Pilih ayat yang menggunakan imbuhan dengan betul:', options: ['Ahmad menulis surat', 'Ahmad tuliskan surat', 'Ahmad bertulis surat'], correct: 0, trivia: 'Imbuhan "men-..." digunakan untuk perbuatan aktif.' }
       ],
-      riddle: [
-        { riddle: 'Saya hijau di pokok, menyerap matahari untuk buat makanan. Siapa saya?', answer: 'DAUN', trivia: 'Daun mempunyai klorofil hijau.' },
-        { riddle: 'Saya tempat tinggal manusia dan haiwan. Siapa saya?', answer: 'BUMI', trivia: 'Bumi ialah planet ketiga dari matahari.' }
+      'Matematik': [
+        { q: 'Apakah nilai pecahan bagi 0.50?', options: ['1/2', '1/4', '3/4'], correct: 0, trivia: '0.50 bersamaan dengan separuh atau 1/2.' },
+        { q: 'Berapakah 12 × 4?', options: ['48', '44', '52'], correct: 0, trivia: '12 darab 4 ialah 48.' }
+      ],
+      'Sejarah': [
+        { q: 'Apakah nama zaman air batu terbaharu?', options: ['Holosen', 'Pleistosen', 'Miosen'], correct: 0, trivia: 'Zaman Holosen bermula 11,700 tahun yang lalu.' },
+        { q: 'Apakah yang berlaku apabila suhu bumi meningkat?', options: ['Air batu mencair', 'Salji menebal', 'Gunung berapi beku'], correct: 0, trivia: 'Peningkatan suhu menyebabkan paras laut meningkat.' }
       ]
     };
 
-    // --- LOFI AUDIO ENGINE ---
-    let audioCtx = null;
-    let lofiInterval = null;
-    function toggleLofi() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      state.lofiPlaying = !state.lofiPlaying;
-      const btn = document.getElementById('lofiBtn');
-      if (state.lofiPlaying) {
-        audioCtx.resume();
-        btn.className = "p-2.5 rounded-full bg-indigo-600 text-white transition flex items-center gap-2 text-sm font-semibold shadow-md animate-pulse";
-        btn.innerHTML = "🎶 <span>Muzik Lofi: ON</span>";
-      } else {
-        audioCtx.suspend();
-        btn.className = "p-2.5 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-50 transition flex items-center gap-2 text-sm font-semibold";
-        btn.innerHTML = "🎵 <span class=\"hidden sm:inline\">Muzik Lofi</span>";
-      }
-    }
+    function App() {
+      const [view, setView] = useState('home');
+      const [role, setRole] = useState(null);
+      const [subject, setSubject] = useState(null);
+      const [level, setLevel] = useState('Tahap 1');
+      const [playerName, setPlayerName] = useState('');
+      const [gameMode, setGameMode] = useState('mcq');
+      const [currentQ, setCurrentQ] = useState(0);
+      const [score, setScore] = useState(0);
+      const [lives, setLives] = useState(3);
+      const [feedback, setFeedback] = useState(null);
+      const [isMusicPlaying, setIsMusicPlaying] = useState(false);
 
-    function playSound(type) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        const now = ctx.currentTime;
-        if (type === 'correct') {
-          osc.frequency.setValueAtTime(523, now);
-          osc.frequency.setValueAtTime(659, now + 0.1);
-          gain.gain.setValueAtTime(0.2, now);
-          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      // Quiz Manager for Teachers
+      const [quizzes, setQuizzes] = useState([
+        { id: 1, title: 'Kuiz Sains Tahun 4', subject: 'Sains', questionsCount: 5 }
+      ]);
+      const [newQuizTitle, setNewQuizTitle] = useState('');
+      const [newQuizSubject, setNewQuizSubject] = useState('Sains');
+
+      const lofiRef = useRef(null);
+      useEffect(() => {
+        lofiRef.current = new LofiGenerator();
+      }, []);
+
+      const toggleMusic = () => {
+        if (lofiRef.current) {
+          const playing = lofiRef.current.toggle();
+          setIsMusicPlaying(playing);
+        }
+      };
+
+      const startNotes = (sub) => {
+        setSubject(sub);
+        setView('notes_level');
+      };
+
+      const startGame = (mode) => {
+        setGameMode(mode);
+        setScore(0);
+        setLives(3);
+        setCurrentQ(0);
+        setFeedback(null);
+        setView('game_play');
+      };
+
+      const handleAnswer = (index, correctIndex, trivia) => {
+        if (feedback) return;
+        if (index === correctIndex) {
+          playSFX('correct');
+          setScore(s => s + 20);
+          setFeedback({ isCorrect: true, text: `Tahniah! ${trivia || ''}` });
         } else {
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(200, now);
-          gain.gain.setValueAtTime(0.2, now);
-          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+          playSFX('wrong');
+          setLives(l => l - 1);
+          setFeedback({ isCorrect: false, text: `Aduh! Jawapan kurang tepat. ${trivia || ''}` });
         }
-        osc.start(now);
-        osc.stop(now + 0.3);
-      } catch(e) {}
-    }
+      };
 
-    // --- ROUTER & RENDER ENGINE ---
-    function navigate(viewName) {
-      state.view = viewName;
-      render();
-      window.scrollTo(0,0);
-    }
-
-    function render() {
-      const app = document.getElementById('app');
-      app.innerHTML = '';
-
-      if (state.view === 'home') {
-        app.innerHTML = `
-          <div class="text-center py-12 space-y-6">
-            <h1 class="text-4xl sm:text-6xl font-black text-slate-900 leading-tight">
-              Pendidikan Interaktif & Menyeronokkan dengan <br><span class="text-blue-600">SIRISNO Edu</span>
-            </h1>
-            <p class="text-lg text-slate-600 max-w-2xl mx-auto">
-              Platform digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif & 3 mod permainan AI merangsang minda.
-            </p>
-            <div class="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-              <button onclick="navigate('student_dash')" class="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-4 px-8 rounded-2xl shadow-xl transition transform hover:scale-105">
-                🚀 Masuk Sebagai Murid
-              </button>
-              <button onclick="navigate('teacher_dash')" class="bg-white hover:bg-slate-100 border-2 border-slate-200 text-slate-800 text-lg font-bold py-4 px-8 rounded-2xl shadow-sm transition">
-                👨‍🏫 Portal Guru
-              </button>
-            </div>
-            <div class="grid sm:grid-cols-3 gap-6 pt-12 text-left">
-              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <div class="text-3xl mb-3">📚</div>
-                <h3 class="font-bold text-xl mb-2">Nota & Infografik</h3>
-                <p class="text-slate-600 text-sm">Nota ringkas dan padat untuk ulangan pantas subjek KPM.</p>
-              </div>
-              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <div class="text-3xl mb-3">🎮</div>
-                <h3 class="font-bold text-xl mb-2">Permainan Digital AI</h3>
-                <p class="text-slate-600 text-sm">3 Mod Permainan Interaktif (Pengembaraan, Ketuk Jawapan & Teka-Teki).</p>
-              </div>
-              <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <div class="text-3xl mb-3">📊</div>
-                <h3 class="font-bold text-xl mb-2">Analisis Prestasi</h3>
-                <p class="text-slate-600 text-sm">Pantau tahap penguasaan murid secara terus.</p>
-              </div>
-            </div>
-          </div>
-        `;
-      } 
-      
-      else if (state.view === 'student_dash') {
-        app.innerHTML = `
-          <div class="space-y-8">
-            <div>
-              <h2 class="text-3xl font-extrabold">Selamat Datang, Murid Pintar! 🚀</h2>
-              <p class="text-slate-500 mt-1">Pilih aktiviti pembelajaran anda hari ini.</p>
-            </div>
-            <div class="grid md:grid-cols-2 gap-6">
-              <div onclick="navigate('notes_subject')" class="bg-indigo-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
-                <div class="text-4xl mb-4">📖</div>
-                <h3 class="text-2xl font-bold mb-2">Nota & Infografik</h3>
-                <p class="text-indigo-100">Ulang kaji subjek teras & elektif KPM dengan visual menarik.</p>
-              </div>
-              <div onclick="navigate('game_name')" class="bg-pink-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
-                <div class="text-4xl mb-4">🎮</div>
-                <h3 class="text-2xl font-bold mb-2">Permainan Digital AI</h3>
-                <p class="text-pink-100">Cabaran minda 3 Mod Pintar (Pengembaraan, Ketuk Jawapan & Teka-Teki).</p>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      else if (state.view === 'teacher_dash') {
-        app.innerHTML = `
-          <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-4 max-w-2xl mx-auto">
-            <div class="text-5xl">👨‍🏫</div>
-            <h2 class="text-3xl font-bold">Portal Guru SIRISNO Edu</h2>
-            <p class="text-slate-600">Sistem pengurusan kuiz dan pangkalan data murid sedang disedia untuk kemaskini seterusnya.</p>
-            <button onclick="navigate('student_dash')" class="bg-slate-900 text-white font-bold px-6 py-3 rounded-xl">Kembali ke Dashboard</button>
-          </div>
-        `;
-      }
-
-      else if (state.view === 'notes_subject') {
-        let html = `
-          <div class="space-y-6">
-            <button onclick="navigate('student_dash')" class="text-slate-500 font-bold">← Kembali</button>
-            <h2 class="text-3xl font-bold">Pilih Subjek Nota:</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        `;
-        SUBJECTS.forEach(sub => {
-          html += `
-            <div onclick="selectSubjectNotes('${sub}')" class="bg-white p-6 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-lg transition cursor-pointer text-center font-bold text-slate-800">
-              <div class="text-3xl mb-2">📄</div>
-              ${sub}
-            </div>
-          `;
-        });
-        html += `</div></div>`;
-        app.innerHTML = html;
-      }
-
-      else if (state.view === 'notes_view') {
-        const note = SAMPLE_NOTES[state.subject] || SAMPLE_NOTES['Sains'];
-        let html = `
-          <div class="bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-100 p-6 sm:p-10 space-y-8">
-            <button onclick="navigate('notes_subject')" class="text-slate-500 font-bold mb-4">← Pilih Subjek Lain</button>
-            <div class="bg-indigo-600 text-white p-8 rounded-2xl">
-              <span class="bg-indigo-500 text-xs font-bold px-3 py-1 rounded-full uppercase">${state.subject}</span>
-              <h1 class="text-3xl sm:text-5xl font-extrabold mt-3">${note.title}</h1>
-            </div>
-            <p class="text-xl text-slate-600 italic border-l-4 border-indigo-500 pl-4">"${note.intro}"</p>
-            <div class="grid sm:grid-cols-2 gap-4">
-        `;
-        note.points.forEach((pt, idx) => {
-          html += `
-            <div class="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
-              <span class="w-8 h-8 bg-indigo-600 text-white rounded-full inline-flex items-center justify-center font-bold mb-3">${idx+1}</span>
-              <h3 class="font-bold text-lg mb-1">${pt.subtitle}</h3>
-              <p class="text-slate-600 text-sm">${pt.description}</p>
-            </div>
-          `;
-        });
-        html += `
-            </div>
-            <div class="bg-amber-400 text-slate-900 p-6 rounded-2xl font-bold flex items-center gap-4">
-              <div class="text-3xl">💡</div>
-              <div>Fakta Menarik: ${note.fun_fact}</div>
-            </div>
-          </div>
-        `;
-        app.innerHTML = html;
-      }
-
-      else if (state.view === 'game_name') {
-        app.innerHTML = `
-          <div class="bg-white p-8 rounded-3xl shadow-xl max-w-md mx-auto text-center space-y-6">
-            <div class="text-5xl">🎮</div>
-            <h2 class="text-2xl font-bold">Masukkan Nama Pemain</h2>
-            <input id="pNameInput" type="text" value="${state.playerName}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-center font-bold text-lg" />
-            <button onclick="setPlayerName()" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 rounded-xl shadow-lg">Seterusnya</button>
-          </div>
-        `;
-      }
-
-      else if (state.view === 'game_mode') {
-        app.innerHTML = `
-          <div class="space-y-6">
-            <button onclick="navigate('student_dash')" class="text-slate-500 font-bold">← Kembali</button>
-            <h2 class="text-3xl font-bold text-center">Pilih Mod Permainan</h2>
-            <div class="grid md:grid-cols-3 gap-6">
-              <div onclick="startGame('mcq')" class="bg-blue-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-                <div class="text-5xl mb-4">🚀</div>
-                <h3 class="text-2xl font-bold mb-2">Pengembaraan Fakta</h3>
-                <p class="text-blue-100 text-sm">Jawab cabaran fakta secepat mungkin.</p>
-              </div>
-              <div onclick="startGame('whack')" class="bg-emerald-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-                <div class="text-5xl mb-4">🔨</div>
-                <h3 class="text-2xl font-bold mb-2">Ketuk Jawapan Pintar</h3>
-                <p class="text-emerald-100 text-sm">Ketuk jawapan tepat yang muncul dari lubang!</p>
-              </div>
-              <div onclick="startGame('riddle')" class="bg-orange-500 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
-                <div class="text-5xl mb-4">🧩</div>
-                <h3 class="text-2xl font-bold mb-2">Teka-Teki Pintar</h3>
-                <p class="text-orange-100 text-sm">Main teka huruf rahsia!</p>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      else if (state.view === 'game_play') {
-        const questions = SAMPLE_GAMES[state.gameMode] || SAMPLE_GAMES.mcq;
-        const q = questions[state.currentQ];
-
-        if (!q || state.lives <= 0) {
-          app.innerHTML = `
-            <div class="bg-slate-900 text-white p-10 rounded-3xl max-w-md mx-auto text-center space-y-6 shadow-2xl">
-              <div class="text-6xl">🏆</div>
-              <h2 class="text-3xl font-extrabold">Permainan Tamat!</h2>
-              <p class="text-slate-400">Pemain: ${state.playerName}</p>
-              <div class="text-5xl font-black text-yellow-400">${state.score} Mata</div>
-              <button onclick="navigate('game_mode')" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-4 rounded-xl shadow-lg">Main Semula</button>
-            </div>
-          `;
-          return;
+      const nextQuestion = (totalQuestions) => {
+        setFeedback(null);
+        if (lives <= 0 || currentQ >= totalQuestions - 1) {
+          setView('game_over');
+        } else {
+          setCurrentQ(q => q + 1);
         }
+      };
 
-        let gameContent = '';
-        if (state.gameMode === 'mcq') {
-          gameContent = `
-            <div class="space-y-4">
-              <div class="bg-slate-800 p-6 rounded-2xl text-center"><h3 class="text-2xl font-bold">${q.q}</h3></div>
-              <div class="grid sm:grid-cols-3 gap-4">
-                ${q.options.map((opt, i) => `<button onclick="answerMCQ(${i})" class="p-4 bg-slate-800 hover:bg-indigo-600 rounded-xl font-bold text-lg">${opt}</button>`).join('')}
-              </div>
+      const handleCreateQuiz = () => {
+        if (!newQuizTitle.trim()) return;
+        setQuizzes([...quizzes, { id: Date.now(), title: newQuizTitle, subject: newQuizSubject, questionsCount: 3 }]);
+        setNewQuizTitle('');
+        alert('Kuiz berjaya diterbitkan!');
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col justify-between">
+          {/* HEADER / NAVIGATION */}
+          <nav className="bg-white border-b border-slate-100 px-4 sm:px-8 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
+              <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-md">S</div>
+              <span className="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">SIRISNO Edu</span>
             </div>
-          `;
-        } else if (state.gameMode === 'whack') {
-          gameContent = `
-            <div class="space-y-6">
-              <div class="bg-slate-800 p-6 rounded-2xl text-center"><h3 class="text-2xl font-bold">${q.q}</h3></div>
-              <div class="grid grid-cols-3 gap-4 max-w-md mx-auto">
-                ${q.options.map((opt, i) => `
-                  <div class="h-28 bg-slate-950 rounded-2xl border-4 border-slate-800 flex items-end justify-center p-1 overflow-hidden">
-                    <button onclick="answerMCQ(${i})" class="w-full h-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl p-2 text-sm">${opt}</button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={toggleMusic} 
+                className={`px-3 py-2 rounded-full text-xs sm:text-sm font-bold flex items-center gap-2 transition ${isMusicPlaying ? 'bg-indigo-600 text-white shadow-md animate-pulse' : 'bg-slate-100 text-slate-600'}`}
+              >
+                🎶 <span>{isMusicPlaying ? 'Lofi: ON' : 'Muzik Lofi'}</span>
+              </button>
+              {role && (
+                <button onClick={() => { setRole(null); setView('home'); }} className="text-slate-500 hover:text-slate-800 text-xs font-bold px-2 py-1">
+                  Log Keluar
+                </button>
+              )}
+            </div>
+          </nav>
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6">
+            
+            {/* 1. HOMEPAGE */}
+            {view === 'home' && (
+              <div className="text-center py-10 space-y-6">
+                <h1 className="text-3xl sm:text-6xl font-black text-slate-900 leading-tight">
+                  Pendidikan Interaktif & Menyeronokkan dengan <br className="hidden sm:inline" />
+                  <span className="text-blue-600">SIRISNO Edu</span>
+                </h1>
+                <p className="text-slate-600 max-w-2xl mx-auto text-sm sm:text-base">
+                  Platform pembelajaran digital berasaskan silibus KPM (Tahun 1-6). Dilengkapi nota interaktif, permainan merangsang minda, dan portal guru yang efisien.
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
+                  <button onClick={() => { setRole('student'); setView('student_dash'); }} className="bg-blue-600 hover:bg-blue-700 text-white text-base sm:text-lg font-bold py-4 px-8 rounded-2xl shadow-xl transition transform hover:scale-105">
+                    🚀 Masuk Portal Murid
+                  </button>
+                  <button onClick={() => { setRole('teacher'); setView('teacher_dash'); }} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-base sm:text-lg font-bold py-4 px-8 rounded-2xl shadow-sm transition">
+                    👨‍🏫 Portal Guru
+                  </button>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-6 pt-10 text-left">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="text-4xl mb-3">📚</div>
+                    <h3 className="font-bold text-lg mb-1">Nota & Infografik</h3>
+                    <p className="text-slate-500 text-sm">Terokai nota dan infografik teras KPM dengan visual menarik.</p>
                   </div>
-                `).join('')}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="text-4xl mb-3">🎮</div>
+                    <h3 className="font-bold text-lg mb-1">Permainan Digital AI</h3>
+                    <p className="text-slate-500 text-sm">3 Mod Permainan Cabaran Minda (Pengembaraan, Ketuk Jawapan & Teka-Teki).</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="text-4xl mb-3">📊</div>
+                    <h3 className="font-bold text-lg mb-1">Analisis Prestasi</h3>
+                    <p className="text-slate-500 text-sm">Memantau pencapaian dan penguasaan subjek murid.</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          `;
-        } else if (state.gameMode === 'riddle') {
-          gameContent = `
-            <div class="space-y-6 text-center">
-              <div class="bg-slate-800 p-6 rounded-2xl"><h3 class="text-2xl font-bold text-orange-400 italic">"${q.riddle}"</h3></div>
-              <div class="text-3xl font-black tracking-widest bg-slate-800 p-4 rounded-xl inline-block text-orange-400">${q.answer}</div>
-              <div class="pt-4"><button onclick="answerMCQ(0)" class="bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-3 rounded-xl">Saya Faham Jawapan!</button></div>
-            </div>
-          `;
-        }
+            )}
 
-        app.innerHTML = `
-          <div class="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border-4 border-slate-700 space-y-6 max-w-4xl mx-auto">
-            <div class="flex justify-between items-center text-sm sm:text-base font-bold">
-              <span class="text-indigo-400">Soalan ${state.currentQ + 1}/${questions.length}</span>
-              <div class="flex gap-4">
-                <span class="text-yellow-400">Skor: ${state.score}</span>
-                <span class="text-red-400">Nyawa: ${'❤️'.repeat(state.lives)}</span>
+            {/* 2. STUDENT DASHBOARD */}
+            {view === 'student_dash' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800">Selamat Datang, Murid Pintar! 🚀</h2>
+                  <p className="text-slate-500 text-sm mt-1">Pilih modul aktiviti anda hari ini:</p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div onClick={() => setView('notes_subject')} className="bg-indigo-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
+                    <div className="text-4xl mb-4">📖</div>
+                    <h3 className="text-2xl font-bold mb-2">Nota & Infografik Pintar</h3>
+                    <p className="text-indigo-100 text-sm">Ulang kaji subjek teras & elektif KPM secara visual.</p>
+                  </div>
+                  <div onClick={() => setView('game_name')} className="bg-pink-600 text-white p-8 rounded-3xl shadow-xl cursor-pointer hover:scale-105 transition">
+                    <div className="text-4xl mb-4">🎮</div>
+                    <h3 className="text-2xl font-bold mb-2">Permainan Digital AI</h3>
+                    <p className="text-pink-100 text-sm">Cabaran 3 Mod Pintar (Pengembaraan Fakta, Ketuk Jawapan & Teka-Teki).</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            ${gameContent}
-          </div>
-        `;
-      }
+            )}
+
+            {/* 3. TEACHER DASHBOARD */}
+            {view === 'teacher_dash' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-slate-800">Portal Guru - SIRISNO Edu</h2>
+                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+                  <h3 className="font-bold text-lg">Cipta Kuiz Baru</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="Tajuk Kuiz" 
+                      value={newQuizTitle}
+                      onChange={e => setNewQuizTitle(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm"
+                    />
+                    <select 
+                      value={newQuizSubject} 
+                      onChange={e => setNewQuizSubject(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
+                    >
+                      {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={handleCreateQuiz} className="bg-blue-600 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md">
+                    Terbitkan Kuiz
+                  </button>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                  <h3 className="font-bold text-lg mb-4">Senarai Kuiz Diterbitkan</h3>
+                  <div className="space-y-3">
+                    {quizzes.map(q => (
+                      <div key={q.id} className="p-4 bg-slate-50 rounded-xl flex justify-between items-center">
+                        <div>
+                          <div className="font-bold">{q.title}</div>
+                          <div className="text-xs text-slate-500">{q.subject} • {q.questionsCount} Soalan</div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">Aktif</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. NOTES SUBJECT SELECTION */}
+            {view === 'notes_subject' && (
+              <div className="space-y-6">
+                <button onClick={() => setView('student_dash')} className="text-slate-500 font-bold text-sm">← Kembali</button>
+                <h2 className="text-2xl font-bold">Pilih Subjek Nota:</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {SUBJECTS.map(sub => (
+                    <div 
+                      key={sub} 
+                      onClick={() => startNotes(sub)} 
+                      className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-md transition cursor-pointer text-center font-bold text-slate-800"
+                    >
+                      <div className="text-3xl mb-2">📄</div>
+                      {sub}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 5. NOTES LEVEL SELECTION */}
+            {view === 'notes_level' && (
+              <div className="space-y-6 text-center py-6">
+                <button onClick={() => setView('notes_subject')} className="text-slate-500 font-bold text-sm float-left">← Kembali</button>
+                <div className="clear-both"></div>
+                <h2 className="text-2xl sm:text-3xl font-bold">Pilih Tahap: <span className="text-indigo-600">{subject}</span></h2>
+                <div className="grid sm:grid-cols-2 gap-6 max-w-xl mx-auto pt-4">
+                  <div onClick={() => { setLevel('Tahap 1 (Tahun 1-3)'); setView('notes_detail'); }} className="bg-emerald-500 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl font-bold text-xl">
+                    Tahap 1 (Tahun 1-3)
+                  </div>
+                  <div onClick={() => { setLevel('Tahap 2 (Tahun 4-6)'); setView('notes_detail'); }} className="bg-indigo-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl font-bold text-xl">
+                    Tahap 2 (Tahun 4-6)
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. NOTES DETAIL VIEW */}
+            {view === 'notes_detail' && (
+              <div className="bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-100 p-6 sm:p-10 space-y-8">
+                <button onClick={() => setView('notes_subject')} className="text-slate-500 font-bold text-sm">← Pilih Subjek Lain</button>
+                {(() => {
+                  const note = SAMPLE_NOTES[subject] || SAMPLE_NOTES['Sains'];
+                  return (
+                    <>
+                      <div className="bg-indigo-600 text-white p-8 rounded-2xl">
+                        <div className="flex justify-between items-center">
+                          <span className="bg-indigo-500 text-xs font-bold px-3 py-1 rounded-full uppercase">{subject}</span>
+                          <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">{level}</span>
+                        </div>
+                        <h1 className="text-2xl sm:text-4xl font-extrabold mt-3">{note.title}</h1>
+                      </div>
+                      <p className="text-lg text-slate-600 italic border-l-4 border-indigo-500 pl-4">"{note.intro}"</p>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        {note.points.map((pt, idx) => (
+                          <div key={idx} className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
+                            <span className="w-8 h-8 bg-indigo-600 text-white rounded-full inline-flex items-center justify-center font-bold mb-3">{idx + 1}</span>
+                            <h3 className="font-bold text-base mb-1">{pt.subtitle}</h3>
+                            <p className="text-slate-600 text-sm">{pt.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-amber-400 text-slate-900 p-6 rounded-2xl font-bold flex items-center gap-4">
+                        <div className="text-3xl">💡</div>
+                        <div className="text-sm sm:text-base">Fakta Menarik: {note.fun_fact}</div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* 7. GAME PLAYER NAME */}
+            {view === 'game_name' && (
+              <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md mx-auto text-center space-y-6 my-10">
+                <div className="text-5xl">🎮</div>
+                <h2 className="text-2xl font-bold">Masukkan Nama Pemain</h2>
+                <input 
+                  type="text" 
+                  value={playerName} 
+                  onChange={e => setPlayerName(e.target.value)} 
+                  placeholder="Cth: Amir Pintar" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-center font-bold text-lg"
+                />
+                <button 
+                  onClick={() => setView('game_subject')} 
+                  disabled={!playerName.trim()}
+                  className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-lg"
+                >
+                  Seterusnya
+                </button>
+              </div>
+            )}
+
+            {/* 8. GAME SUBJECT SELECTION */}
+            {view === 'game_subject' && (
+              <div className="space-y-6">
+                <button onClick={() => setView('student_dash')} className="text-slate-500 font-bold text-sm">← Kembali</button>
+                <h2 className="text-2xl font-bold">Pilih Subjek Permainan:</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {SUBJECTS.map(sub => (
+                    <div 
+                      key={sub} 
+                      onClick={() => { setSubject(sub); setView('game_mode'); }} 
+                      className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-pink-500 hover:shadow-md transition cursor-pointer text-center font-bold text-slate-800"
+                    >
+                      <div className="text-3xl mb-2">🎯</div>
+                      {sub}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 9. GAME MODE SELECTION */}
+            {view === 'game_mode' && (
+              <div className="space-y-6">
+                <button onClick={() => setView('game_subject')} className="text-slate-500 font-bold text-sm">← Tukar Subjek</button>
+                <h2 className="text-2xl font-bold text-center">Pilih Mod Permainan: <span className="text-pink-600">{subject}</span></h2>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div onClick={() => startGame('mcq')} className="bg-blue-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                    <div className="text-5xl mb-4">🚀</div>
+                    <h3 className="text-xl font-bold mb-2">Pengembaraan Fakta</h3>
+                    <p className="text-blue-100 text-xs sm:text-sm">Jawab cabaran fakta secepat mungkin.</p>
+                  </div>
+                  <div onClick={() => startGame('whack')} className="bg-emerald-600 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                    <div className="text-5xl mb-4">🔨</div>
+                    <h3 className="text-xl font-bold mb-2">Ketuk Jawapan Pintar</h3>
+                    <p className="text-emerald-100 text-xs sm:text-sm">Ketuk pilihan tepat dari lubang!</p>
+                  </div>
+                  <div onClick={() => startGame('riddle')} className="bg-orange-500 text-white p-8 rounded-3xl cursor-pointer hover:scale-105 transition shadow-xl text-center">
+                    <div className="text-5xl mb-4">🧩</div>
+                    <h3 className="text-xl font-bold mb-2">Teka-Teki Pintar</h3>
+                    <p className="text-orange-100 text-xs sm:text-sm">Cabaran teka huruf rahsia!</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 10. GAME PLAYING SCREEN */}
+            {view === 'game_play' && (
+              <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border-4 border-slate-800 space-y-6 max-w-3xl mx-auto relative">
+                {(() => {
+                  const questions = GAME_QUESTIONS[subject] || GAME_QUESTIONS['Sains'];
+                  const q = questions[currentQ];
+
+                  if (!q) return null;
+
+                  return (
+                    <>
+                      <div className="flex justify-between items-center text-sm font-bold">
+                        <span className="text-pink-400">Soalan {currentQ + 1} / {questions.length}</span>
+                        <div className="flex gap-4">
+                          <span className="text-yellow-400">Skor: {score}</span>
+                          <span className="text-red-400">Nyawa: {'❤️'.repeat(lives)}</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800 p-6 rounded-2xl text-center border border-slate-700">
+                        <h3 className="text-xl sm:text-2xl font-bold text-white">{q.q}</h3>
+                      </div>
+
+                      {/* GAME MODES LAYOUT */}
+                      {gameMode === 'mcq' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {q.options.map((opt, i) => (
+                            <button 
+                              key={i} 
+                              onClick={() => handleAnswer(i, q.correct, q.trivia)}
+                              className="p-4 bg-slate-800 hover:bg-pink-600 rounded-xl font-bold text-sm sm:text-base transition border border-slate-700 text-slate-100"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {gameMode === 'whack' && (
+                        <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
+                          {q.options.map((opt, i) => (
+                            <div key={i} className="h-28 bg-slate-950 rounded-2xl border-2 border-slate-800 flex items-end justify-center p-1 overflow-hidden">
+                              <button 
+                                onClick={() => handleAnswer(i, q.correct, q.trivia)}
+                                className="w-full h-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl p-2 text-xs sm:text-sm active:scale-95 transition"
+                              >
+                                {opt}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {gameMode === 'riddle' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {q.options.map((opt, i) => (
+                            <button 
+                              key={i} 
+                              onClick={() => handleAnswer(i, q.correct, q.trivia)}
+                              className="p-4 bg-slate-800 hover:bg-orange-500 rounded-xl font-bold text-sm sm:text-base transition border border-slate-700 text-slate-100"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* FEEDBACK POPUP */}
+                      {feedback && (
+                        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm rounded-3xl flex items-center justify-center p-6 z-20">
+                          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 text-center max-w-sm w-full space-y-4">
+                            <div className={`text-4xl ${feedback.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                              {feedback.isCorrect ? '🎉' : '❌'}
+                            </div>
+                            <p className="text-slate-200 text-sm leading-relaxed">{feedback.text}</p>
+                            <button 
+                              onClick={() => nextQuestion(questions.length)}
+                              className="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl text-sm"
+                            >
+                              Teruskan
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* 11. GAME OVER SCREEN */}
+            {view === 'game_over' && (
+              <div className="bg-slate-900 text-white p-10 rounded-3xl max-w-md mx-auto text-center space-y-6 shadow-2xl my-10">
+                <div className="text-6xl">🏆</div>
+                <h2 className="text-3xl font-extrabold">Tahniah, {playerName || 'Pemain'}!</h2>
+                <p className="text-slate-400 text-sm">Skor Terkumpul Anda Bagi Subjek {subject}:</p>
+                <div className="text-5xl font-black text-yellow-400">{score} Mata</div>
+                <button onClick={() => setView('game_mode')} className="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-4 rounded-xl shadow-lg">
+                  Main Semula
+                </button>
+              </div>
+            )}
+
+          </main>
+
+          {/* FOOTER */}
+          <footer className="bg-slate-900 text-slate-400 py-6 text-center text-xs">
+            <p>&copy; 2026 SIRISNO Edu. Pembelajaran Digital Interaktif KPM.</p>
+          </footer>
+        </div>
+      );
     }
 
-    // --- ACTIONS ---
-    function selectSubjectNotes(sub) {
-      state.subject = sub;
-      navigate('notes_view');
-    }
-
-    function setPlayerName() {
-      const val = document.getElementById('pNameInput').value;
-      if (val.trim()) state.playerName = val;
-      navigate('game_mode');
-    }
-
-    function startGame(mode) {
-      state.gameMode = mode;
-      state.score = 0;
-      state.lives = 3;
-      state.currentQ = 0;
-      navigate('game_play');
-    }
-
-    function answerMCQ(index) {
-      const questions = SAMPLE_GAMES[state.gameMode] || SAMPLE_GAMES.mcq;
-      const q = questions[state.currentQ];
-      if (index === q.correct || state.gameMode === 'riddle') {
-        playSound('correct');
-        state.score += 20;
-      } else {
-        playSound('wrong');
-        state.lives -= 1;
-      }
-      state.currentQ += 1;
-      render();
-    }
-
-    // INITIAL RENDER
-    render();
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
 ```
+
+Saya telah menjana fail **`index.html`** yang bersih dan lengkap di atas (tanpa sebarang bahagian tambahan di bawahnya).
+
+### 📋 Arahan Kemaskini di GitHub (Dari iPhone Anda):
+
+1. Buka **Safari** di iPhone ➔ Layari **[GitHub.com](https://github.com)** ➔ Masuk ke repositori **`sirisnoEdu`**.
+2. Ketik pada fail **`index.html`**.
+3. Ketik ikon pensel **✏️** (Edit).
+4. **Padam SEMUA kod lama** di dalam fail itu.
+5. **Salin (*copy*)** kod penuh baharu daripada fail `index.html` di atas dan **Tampal (*paste*)** ke dalam fail di GitHub.
+6. Skrol ke bawah dan tekan **Commit changes...**.
+
+Vercel akan mengemas kini laman web anda secara automatik dalam masa **5-10 saat**. Buka semula **`https://sirisnoedu.vercel.app`** di iPhone anda — aplikasi **SIRISNO Edu** penuh sedia digunakan!
